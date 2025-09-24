@@ -102,11 +102,12 @@ RocketTrainer/
 - **training_packs** - Available training content
 - **training_sessions** - User training progress
 
-### ML Pipeline
+### ML Pipeline (Phase 2)
 - **Feature extraction** from replay data (positioning, mechanical skills, game sense)
-- **Weakness detection models** using Random Forest/Gradient Boosting
-- **Rank prediction models** using XGBoost
+- **Weakness detection models** using Random Forest/Gradient Boosting (scikit-learn)
+- **Rank prediction models** using XGBoost (planned)
 - **Confidence scoring** and improvement potential calculation
+- **TensorFlow integration** for advanced deep learning models (future)
 
 ## Development Workflow
 
@@ -174,14 +175,17 @@ docker-compose exec frontend npm test
 
 ## Development Phases
 
-### Phase 1: Foundation (Weeks 1-4)
-- Project setup and infrastructure
-- Database schema and user authentication
-- Ballchasing.com API integration
-- Basic replay parsing and dashboard
+### Phase 1: Foundation (Weeks 1-4) ✅ COMPLETED
+- Project setup and infrastructure ✅
+- Database schema and user authentication ✅
+- TimescaleDB hypertables for time-series data ✅
+- Docker containerization and development environment ✅
+- FastAPI application structure with modular routing ✅
 
-### Phase 2: Core Analysis (Weeks 5-8)
-- ML model development for weakness detection
+### Phase 2: Core Analysis (Weeks 5-8) 🚧 IN PROGRESS
+- Ballchasing.com API integration
+- Basic replay parsing and analysis
+- ML model development for weakness detection (scikit-learn)
 - Training pack database and recommendation algorithm
 - Advanced dashboard features and progress tracking
 
