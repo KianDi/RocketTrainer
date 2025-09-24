@@ -43,8 +43,13 @@ RocketTrainer/
 │   │   ├── schemas/           # Pydantic schemas
 │   │   ├── api/               # API routes (auth, users, replays, training)
 │   │   ├── services/          # Business logic services
-│   │   ├── ml/                # Machine learning models
+│   │   ├── ml/                # Machine learning models (planned)
 │   │   └── utils/             # Utility functions
+│   ├── sql/                   # Database initialization scripts
+│   │   ├── 01_init_extensions.sql    # TimescaleDB extensions
+│   │   └── 02_create_hypertables.sql # Time-series table setup
+│   ├── alembic/               # Database migrations
+│   ├── scripts/               # Utility scripts
 │   ├── tests/                 # Backend tests
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -52,15 +57,14 @@ RocketTrainer/
 │   ├── src/
 │   │   ├── components/        # Reusable React components
 │   │   ├── pages/            # Page components
-│   │   ├── hooks/            # Custom React hooks
+│   │   ├── contexts/         # React context providers
 │   │   ├── services/         # API service functions
-│   │   ├── utils/            # Utility functions
-│   │   ├── types/            # TypeScript type definitions
-│   │   └── styles/           # CSS/styling
+│   │   └── types/            # TypeScript type definitions
 │   ├── package.json
 │   └── Dockerfile
-├── ml/                       # ML training scripts and notebooks
+├── ml/                       # ML training scripts and notebooks (planned)
 ├── docs/                     # Project documentation
+├── .github/                  # GitHub workflows
 └── docker-compose.yml       # Development environment setup
 ```
 
