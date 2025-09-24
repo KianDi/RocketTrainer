@@ -189,10 +189,6 @@ docker-compose exec frontend npm test
 - Training pack database and recommendation algorithm
 - Advanced dashboard features and progress tracking
 
-### Phase 3: User Experience (Weeks 9-12)
-- Mobile responsiveness and user onboarding
-- Performance optimization and advanced analytics
-
 ### Phase 3: Advanced ML & Features (Weeks 9-12)
 - TensorFlow integration for deep learning models
 - 3D replay viewer with Three.js
