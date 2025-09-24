@@ -15,7 +15,7 @@ Democratize professional-level Rocket League coaching through intelligent gamepl
 - **TimescaleDB** - Time series data for player statistics
 - **Redis** - Caching and session management
 - **Celery** - Background task processing
-- **TensorFlow/Scikit-learn** - Machine learning models
+- **Scikit-learn** - Machine learning models (TensorFlow planned for Phase 2)
 - **Docker** - Containerization
 
 ### Frontend
