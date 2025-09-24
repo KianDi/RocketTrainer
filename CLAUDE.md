@@ -218,10 +218,12 @@ docker-compose exec frontend npm test
 - Steam/Epic OAuth registration required
 
 ### Development Priorities
-1. Get basic replay upload and processing working first
-2. Implement simple heuristics before complex ML models
-3. Focus on core user flow: upload → analysis → recommendations
-4. Build ML training pipeline in parallel with user features
+1. Complete Ballchasing.com API integration (Phase 2 focus)
+2. Implement basic replay parsing and data extraction
+3. Start with simple heuristic-based analysis before ML models
+4. Focus on core user flow: upload → analysis → recommendations
+5. Add scikit-learn models for weakness detection
+6. Plan TensorFlow integration for Phase 3
 
 ### Anti-patterns to Avoid
 - Don't over-engineer early - start simple
