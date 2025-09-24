@@ -193,9 +193,15 @@ docker-compose exec frontend npm test
 - Mobile responsiveness and user onboarding
 - Performance optimization and advanced analytics
 
-### Phase 4: Advanced Features (Weeks 13-16)
-- 3D replay viewer and player matching
-- Discord bot integration and community features
+### Phase 3: Advanced ML & Features (Weeks 9-12)
+- TensorFlow integration for deep learning models
+- 3D replay viewer with Three.js
+- Advanced analytics and performance optimization
+
+### Phase 4: Community Features (Weeks 13-16)
+- Player matching and Discord bot integration
+- Mobile responsiveness and user onboarding
+- Community features and social aspects
 
 ## Key Success Metrics
 - **User Acquisition**: 1,000 registered users in first 3 months
