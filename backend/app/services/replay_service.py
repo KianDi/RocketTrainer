@@ -75,7 +75,9 @@ class ReplayService:
     @staticmethod
     async def process_ballchasing_replay(match_id: str, ballchasing_id: str):
         """Process a replay from Ballchasing.com using the actual API."""
-        logger.info("Starting Ballchasing replay processing", match_id=match_id, ballchasing_id=ballchasing_id)
+        logger.info("🚀 BACKGROUND TASK STARTED - Ballchasing replay processing",
+                   match_id=match_id,
+                   ballchasing_id=ballchasing_id)
 
         # Step 1: Get match and user info with a short, separate transaction
         match_info = None
@@ -126,8 +128,32 @@ class ReplayService:
             match_info_data = replay_stats.get("match_info", {})
             score = match_info_data.get("score", {})
 
+            # Extract match information with detailed logging
+            logger.info("Processing match data",
+                       match_id=match_id,
+                       playlist=match_info_data.get("playlist", "unknown"),
+                       duration=match_info_data.get("duration", 0),
+                       blue_score=score.get("blue", 0),
+                       orange_score=score.get("orange", 0))
+
             # Find user's stats in the replay
             user_stats = ballchasing_service.extract_player_stats_for_user(replay_stats, user_steam_id)
+
+            # Log user stats extraction result
+            if user_stats:
+                logger.info("User stats extracted successfully",
+                           match_id=match_id,
+                           user_steam_id=user_steam_id,
+                           player_name=user_stats.get("player_name", "unknown"),
+                           goals=user_stats.get("goals", 0),
+                           assists=user_stats.get("assists", 0),
+                           saves=user_stats.get("saves", 0),
+                           shots=user_stats.get("shots", 0),
+                           score=user_stats.get("score", 0))
+            else:
+                logger.warning("No user stats extracted",
+                             match_id=match_id,
+                             user_steam_id=user_steam_id)
 
             # Prepare match updates
             match_updates = {
@@ -137,7 +163,7 @@ class ReplayService:
                 'score_team_1': score.get("orange", 0),
                 'replay_data': replay_stats,
                 'processed': True,
-                'processed_at': datetime.now(datetime.timezone.utc)
+                'processed_at': datetime.now(timezone.utc)
             }
 
             # Parse match date
@@ -145,15 +171,14 @@ class ReplayService:
                 if match_info_data.get("date"):
                     match_updates['match_date'] = datetime.fromisoformat(match_info_data["date"].replace("Z", "+00:00"))
                 else:
-                    match_updates['match_date'] = datetime.now(datetime.timezone.utc)
+                    match_updates['match_date'] = datetime.now(timezone.utc)
             except:
-                match_updates['match_date'] = datetime.now(datetime.timezone.utc)
+                match_updates['match_date'] = datetime.now(timezone.utc)
 
-            # Find user's stats in the replay
-            user_stats = ballchasing_service.extract_player_stats_for_user(replay_stats, user_steam_id)
+            # Add user stats to match updates if available
             if user_stats:
                 # Add player stats to updates
-                match_updates.update({
+                player_stats_updates = {
                     'goals': user_stats.get("goals", 0),
                     'assists': user_stats.get("assists", 0),
                     'saves': user_stats.get("saves", 0),
@@ -165,7 +190,13 @@ class ReplayService:
                     'time_on_ground': user_stats.get("time_on_ground", 0.0),
                     'time_low_air': user_stats.get("time_low_air", 0.0),
                     'time_high_air': user_stats.get("time_high_air", 0.0)
-                })
+                }
+
+                match_updates.update(player_stats_updates)
+
+                logger.info("Added player stats to match updates",
+                           match_id=match_id,
+                           player_stats=player_stats_updates)
 
                 # Determine result based on team and score
                 user_team = user_stats.get("team", "blue")
@@ -176,9 +207,24 @@ class ReplayService:
 
                 if score.get("blue", 0) == score.get("orange", 0):
                     match_updates['result'] = "draw"
+
+                logger.info("Determined match result",
+                           match_id=match_id,
+                           user_team=user_team,
+                           result=match_updates['result'])
             else:
                 logger.warning("User not found in replay", ballchasing_id=ballchasing_id, user_steam_id=user_steam_id)
                 match_updates['result'] = "unknown"
+
+            # Log final match updates before database operation
+            logger.info("Final match updates prepared",
+                       match_id=match_id,
+                       updates_keys=list(match_updates.keys()),
+                       playlist=match_updates.get('playlist'),
+                       duration=match_updates.get('duration'),
+                       goals=match_updates.get('goals', 'not_set'),
+                       score=match_updates.get('score', 'not_set'),
+                       processed=match_updates.get('processed'))
 
         except Exception as e:
             logger.error("Error processing replay data", ballchasing_id=ballchasing_id, error=str(e))
@@ -210,24 +256,64 @@ class ReplayService:
     @staticmethod
     def _update_match_with_data(match_id: str, match_updates: Dict[str, Any]):
         """Update match with processed data using a fresh transaction."""
+        logger.info("Starting database update",
+                   match_id=match_id,
+                   update_fields=list(match_updates.keys()),
+                   goals_value=match_updates.get('goals', 'not_provided'),
+                   score_value=match_updates.get('score', 'not_provided'))
+
         db = SessionLocal()
         try:
             match = db.query(Match).filter(Match.id == match_id).first()
             if match:
-                # Update all fields
+                logger.info("Match found in database",
+                           match_id=match_id,
+                           current_goals=match.goals,
+                           current_score=match.score,
+                           current_processed=match.processed)
+
+                # Log before updating each field
                 for field, value in match_updates.items():
+                    old_value = getattr(match, field, None)
                     setattr(match, field, value)
+                    logger.debug("Updated field",
+                               match_id=match_id,
+                               field=field,
+                               old_value=old_value,
+                               new_value=value)
+
+                # Flush to ensure changes are prepared
+                db.flush()
+
+                # Log values before commit
+                logger.info("About to commit changes",
+                           match_id=match_id,
+                           goals_after_update=match.goals,
+                           score_after_update=match.score,
+                           playlist_after_update=match.playlist,
+                           processed_after_update=match.processed)
 
                 db.commit()
-                logger.info("Match updated successfully", match_id=match_id,
-                          playlist=match_updates.get('playlist'),
-                          duration=match_updates.get('duration'),
-                          goals=match_updates.get('goals', 0))
+
+                # Verify the commit worked by refreshing and checking
+                db.refresh(match)
+                logger.info("Match updated and committed successfully",
+                           match_id=match_id,
+                           final_goals=match.goals,
+                           final_score=match.score,
+                           final_playlist=match.playlist,
+                           final_duration=match.duration,
+                           final_processed=match.processed)
             else:
                 logger.error("Match not found for update", match_id=match_id)
         except Exception as e:
-            logger.error("Failed to update match", match_id=match_id, error=str(e))
+            logger.error("Failed to update match",
+                        match_id=match_id,
+                        error=str(e),
+                        error_type=type(e).__name__)
             db.rollback()
+            # Re-raise to see full traceback
+            raise
         finally:
             db.close()
 
