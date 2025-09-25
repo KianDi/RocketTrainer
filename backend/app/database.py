@@ -49,8 +49,8 @@ def get_db():
         # Rollback any pending transaction on error
         db.rollback()
         # Log database session error for monitoring
-        import logging
-        logger = logging.getLogger(__name__)
+        import structlog
+        logger = structlog.get_logger(__name__)
         logger.error("Database session error",
                     error=str(e),
                     pool_status=get_db_pool_status())
@@ -78,7 +78,7 @@ def get_db_pool_status():
         "checked_in_connections": pool.checkedin(),
         "checked_out_connections": pool.checkedout(),
         "overflow_connections": pool.overflow(),
-        "invalid_connections": pool.invalid(),
+        "invalid_connections": 0,  # QueuePool doesn't have invalid() method
         "total_connections": pool.size() + pool.overflow(),
         "utilization_percent": round((pool.checkedout() / (pool.size() + pool.overflow())) * 100, 2) if (pool.size() + pool.overflow()) > 0 else 0
     }

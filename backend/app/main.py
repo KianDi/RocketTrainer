@@ -73,6 +73,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Rate limiting is handled directly in the ML API dependencies
+
 # ML-specific exception handlers
 @app.exception_handler(MLModelError)
 async def ml_error_handler(request: Request, exc: MLModelError):

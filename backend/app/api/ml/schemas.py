@@ -224,6 +224,15 @@ class DatabasePoolStatistics(BaseModel):
     utilization_percent: float = Field(..., ge=0.0, le=100.0, description="Pool utilization percentage")
 
 
+class RateLimitStatistics(BaseModel):
+    """Rate limiting statistics."""
+
+    total_tracked_users: int = Field(..., ge=0, description="Total users being tracked for rate limiting")
+    total_rate_limit_keys: int = Field(..., ge=0, description="Total rate limit keys in Redis")
+    endpoints: Dict[str, int] = Field(..., description="Rate limit key count by endpoint")
+    rate_limiter_healthy: bool = Field(..., description="Rate limiter health status")
+
+
 class ModelStatusResponse(BaseModel):
     """Response schema for model status."""
 
@@ -231,6 +240,7 @@ class ModelStatusResponse(BaseModel):
     models: List[ModelInfo] = Field(..., description="Status of all ML models")
     cache_stats: CacheStatistics = Field(..., description="Cache performance statistics")
     database_pool: DatabasePoolStatistics = Field(..., description="Database connection pool statistics")
+    rate_limit_stats: RateLimitStatistics = Field(..., description="Rate limiting statistics")
     uptime: float = Field(..., ge=0.0, description="System uptime in seconds")
     memory_usage: float = Field(..., ge=0.0, le=100.0, description="Memory usage percentage")
     last_health_check: datetime = Field(..., description="Last health check timestamp")

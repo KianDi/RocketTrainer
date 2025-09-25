@@ -12,7 +12,7 @@ comprehensive error handling.
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 import structlog
@@ -34,6 +34,11 @@ from .exceptions import (
     InsufficientDataError,
     ModelNotTrainedError,
     handle_ml_exception
+)
+from .dependencies import (
+    rate_limit_weakness_analysis,
+    rate_limit_training_recommendations,
+    rate_limit_model_status
 )
 
 logger = structlog.get_logger(__name__)
@@ -63,7 +68,8 @@ router = APIRouter(
 )
 async def analyze_weaknesses(
     request: WeaknessAnalysisRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    rate_limit_info: Dict[str, Any] = Depends(rate_limit_weakness_analysis)
 ) -> WeaknessAnalysisResponse:
     """
     Analyze player weaknesses using WeaknessDetector and SkillAnalyzer models.
@@ -74,7 +80,9 @@ async def analyze_weaknesses(
     start_time = datetime.utcnow()
     logger.info("Weakness analysis requested",
                user_id=str(request.user_id),
-               match_ids_count=len(request.match_ids) if request.match_ids else 0)
+               match_ids_count=len(request.match_ids) if request.match_ids else 0,
+               rate_limit_applied=rate_limit_info.get("rate_limit_applied", False),
+               is_premium=rate_limit_info.get("is_premium", False))
 
     try:
         # Set database session for model manager
@@ -226,7 +234,8 @@ async def analyze_weaknesses(
 )
 async def recommend_training(
     request: TrainingRecommendationRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    rate_limit_info: Dict[str, Any] = Depends(rate_limit_training_recommendations)
 ) -> TrainingRecommendationResponse:
     """
     Generate personalized training pack recommendations.
@@ -238,7 +247,9 @@ async def recommend_training(
     logger.info("Training recommendations requested",
                user_id=str(request.user_id),
                skill_level=request.skill_level,
-               max_recommendations=request.max_recommendations)
+               max_recommendations=request.max_recommendations,
+               rate_limit_applied=rate_limit_info.get("rate_limit_applied", False),
+               is_premium=rate_limit_info.get("is_premium", False))
 
     try:
         # Set database session for model manager
@@ -457,7 +468,9 @@ async def recommend_training(
     description="Get health status and performance metrics for all ML models",
     response_description="Model health status and performance metrics"
 )
-async def get_model_status() -> ModelStatusResponse:
+async def get_model_status(
+    rate_limit_info: Dict[str, Any] = Depends(rate_limit_model_status)
+) -> ModelStatusResponse:
     """
     Get ML model health status and performance metrics.
 
@@ -465,7 +478,8 @@ async def get_model_status() -> ModelStatusResponse:
     health status, cache statistics, and performance metrics.
     """
     start_time = datetime.utcnow()
-    logger.info("Model status requested")
+    logger.info("Model status requested",
+               rate_limit_applied=rate_limit_info.get("rate_limit_applied", False))
 
     try:
         # Check cache first
@@ -474,7 +488,8 @@ async def get_model_status() -> ModelStatusResponse:
             logger.info("Returning cached model status")
 
             # Convert cached result to response model
-            from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics
+            from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics, RateLimitStatistics
+            from .dependencies import get_rate_limiting_stats, health_check_rate_limiter
 
             models = [ModelInfo(**model) for model in cached_status["models"]]
             cache_stats = CacheStatistics(**cached_status["cache_stats"])
@@ -483,11 +498,21 @@ async def get_model_status() -> ModelStatusResponse:
             from app.database import get_db_pool_status
             db_pool_stats = DatabasePoolStatistics(**get_db_pool_status())
 
+            # Get fresh rate limiting stats (don't cache these as they change rapidly)
+            rate_limit_stats_data = get_rate_limiting_stats()
+            rate_limit_stats = RateLimitStatistics(
+                total_tracked_users=rate_limit_stats_data.get("total_tracked_users", 0),
+                total_rate_limit_keys=rate_limit_stats_data.get("total_rate_limit_keys", 0),
+                endpoints=rate_limit_stats_data.get("endpoints", {}),
+                rate_limiter_healthy=health_check_rate_limiter()
+            )
+
             return ModelStatusResponse(
                 system_status=cached_status["system_status"],
                 models=models,
                 cache_stats=cache_stats,
                 database_pool=db_pool_stats,
+                rate_limit_stats=rate_limit_stats,
                 uptime=cached_status["uptime"],
                 memory_usage=cached_status["memory_usage"],
                 last_health_check=datetime.fromisoformat(cached_status["last_health_check"])
@@ -537,7 +562,9 @@ async def get_model_status() -> ModelStatusResponse:
             models.append(model_info)
 
         # Build cache statistics
-        from .schemas import CacheStatistics, DatabasePoolStatistics
+        from .schemas import CacheStatistics, DatabasePoolStatistics, RateLimitStatistics
+        from .dependencies import get_rate_limiting_stats, health_check_rate_limiter
+
         cache_stats = CacheStatistics(
             total_requests=cache_statistics.get("total_keys", 0) * 10,  # Estimate
             cache_hits=int(cache_statistics.get("total_keys", 0) * 8),  # Estimate 80% hit rate
@@ -549,6 +576,15 @@ async def get_model_status() -> ModelStatusResponse:
         # Get database pool statistics
         from app.database import get_db_pool_status
         db_pool_stats = DatabasePoolStatistics(**get_db_pool_status())
+
+        # Get rate limiting statistics
+        rate_limit_stats_data = get_rate_limiting_stats()
+        rate_limit_stats = RateLimitStatistics(
+            total_tracked_users=rate_limit_stats_data.get("total_tracked_users", 0),
+            total_rate_limit_keys=rate_limit_stats_data.get("total_rate_limit_keys", 0),
+            endpoints=rate_limit_stats_data.get("endpoints", {}),
+            rate_limiter_healthy=health_check_rate_limiter()
+        )
 
         # Determine overall system status
         overall_status = health_check_results["overall_status"]
@@ -565,6 +601,7 @@ async def get_model_status() -> ModelStatusResponse:
             models=models,
             cache_stats=cache_stats,
             database_pool=db_pool_stats,
+            rate_limit_stats=rate_limit_stats,
             uptime=uptime,
             memory_usage=memory_usage,
             last_health_check=datetime.utcnow()
@@ -597,7 +634,8 @@ async def get_model_status() -> ModelStatusResponse:
         logger.error("Model status check failed", error=str(e))
 
         # Return degraded status on error
-        from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics
+        from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics, RateLimitStatistics
+        from .dependencies import get_rate_limiting_stats, health_check_rate_limiter
 
         # Try to get database pool stats even on error
         try:
@@ -612,6 +650,23 @@ async def get_model_status() -> ModelStatusResponse:
                 invalid_connections=0,
                 total_connections=0,
                 utilization_percent=0.0
+            )
+
+        # Try to get rate limiting stats even on error
+        try:
+            rate_limit_stats_data = get_rate_limiting_stats()
+            rate_limit_stats = RateLimitStatistics(
+                total_tracked_users=rate_limit_stats_data.get("total_tracked_users", 0),
+                total_rate_limit_keys=rate_limit_stats_data.get("total_rate_limit_keys", 0),
+                endpoints=rate_limit_stats_data.get("endpoints", {}),
+                rate_limiter_healthy=health_check_rate_limiter()
+            )
+        except Exception:
+            rate_limit_stats = RateLimitStatistics(
+                total_tracked_users=0,
+                total_rate_limit_keys=0,
+                endpoints={},
+                rate_limiter_healthy=False
             )
 
         error_response = ModelStatusResponse(
@@ -635,6 +690,7 @@ async def get_model_status() -> ModelStatusResponse:
                 avg_cache_time=0.0
             ),
             database_pool=db_pool_stats,
+            rate_limit_stats=rate_limit_stats,
             uptime=0.0,
             memory_usage=0.0,
             last_health_check=datetime.utcnow()
