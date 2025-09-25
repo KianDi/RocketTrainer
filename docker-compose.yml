@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   api:
     build: ./backend
@@ -11,6 +9,7 @@ services:
       - SECRET_KEY=dev-secret-key-change-in-production
       - BALLCHASING_API_KEY=${BALLCHASING_API_KEY:-}
       - STEAM_API_KEY=${STEAM_API_KEY:-}
+      - DEBUG=true
     volumes:
       - ./backend:/app
       - ./ml:/app/ml

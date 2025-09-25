@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     upload_dir: str = "/tmp/uploads"
     
     # ML Models
-    model_dir: str = "/app/ml/models"
+    ml_model_dir: str = "/app/ml/models"
     
     # Rate limiting
     rate_limit_requests: int = 100
@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        # Fix pydantic namespace warning
+        protected_namespaces = ('settings_',)
 
 
 # Global settings instance

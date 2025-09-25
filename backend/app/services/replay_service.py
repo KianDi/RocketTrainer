@@ -3,12 +3,15 @@ Replay processing service for analyzing Rocket League replays.
 """
 import json
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import structlog
 
 from app.config import settings
 from app.database import SessionLocal
 from app.models.match import Match
+from app.models.user import User
+from app.models.player_stats import PlayerStats
+from app.services.ballchasing_service import ballchasing_service
 
 logger = structlog.get_logger()
 
@@ -71,57 +74,222 @@ class ReplayService:
     
     @staticmethod
     async def process_ballchasing_replay(match_id: str, ballchasing_id: str):
-        """Process a replay from Ballchasing.com."""
+        """Process a replay from Ballchasing.com using the actual API."""
+        logger.info("Starting Ballchasing replay processing", match_id=match_id, ballchasing_id=ballchasing_id)
+
+        # Step 1: Get match and user info with a short, separate transaction
+        match_info = None
+        user_steam_id = None
+
         db = SessionLocal()
         try:
             match = db.query(Match).filter(Match.id == match_id).first()
             if not match:
                 logger.error("Match not found for processing", match_id=match_id)
                 return
-            
-            # TODO: Implement Ballchasing.com API integration
-            # For MVP, we'll create mock analysis data
-            analysis_result = ReplayService._mock_ballchasing_analysis(ballchasing_id)
-            
-            # Update match with analysis results
-            match.playlist = analysis_result.get("playlist", "ranked-duels")
-            match.duration = analysis_result.get("duration", 300)
-            match.match_date = datetime.utcnow()
-            match.score_team_0 = analysis_result.get("score_team_0", 0)
-            match.score_team_1 = analysis_result.get("score_team_1", 0)
-            match.result = analysis_result.get("result", "unknown")
-            
-            # Player stats
-            player_stats = analysis_result.get("player_stats", {})
-            match.goals = player_stats.get("goals", 0)
-            match.assists = player_stats.get("assists", 0)
-            match.saves = player_stats.get("saves", 0)
-            match.shots = player_stats.get("shots", 0)
-            match.score = player_stats.get("score", 0)
-            match.boost_usage = player_stats.get("boost_usage", 0.0)
-            match.average_speed = player_stats.get("average_speed", 0.0)
-            
-            # Store full replay data
-            match.replay_data = analysis_result
-            match.processed = True
-            match.processed_at = datetime.utcnow()
-            
-            db.commit()
-            
-            logger.info("Ballchasing replay processed successfully", match_id=match_id, ballchasing_id=ballchasing_id)
-            
+
+            user = db.query(User).filter(User.id == match.user_id).first()
+            if not user:
+                logger.error("User not found for match", match_id=match_id, user_id=str(match.user_id))
+                return
+
+            # Store the info we need
+            match_info = {
+                'id': match.id,
+                'user_id': match.user_id,
+                'ballchasing_id': match.ballchasing_id
+            }
+            user_steam_id = user.steam_id
+
         except Exception as e:
-            logger.error("Ballchasing replay processing failed", match_id=match_id, error=str(e))
-            # Mark as failed
+            logger.error("Error fetching match info", match_id=match_id, error=str(e))
+            ReplayService._mark_match_failed(match_id, str(e))
+            return
+        finally:
+            db.close()
+
+        # Step 2: Fetch replay data from Ballchasing.com (no database involved)
+        try:
+            replay_stats = await ballchasing_service.get_replay_stats(ballchasing_id)
+            if not replay_stats:
+                logger.error("Failed to fetch replay from Ballchasing", ballchasing_id=ballchasing_id)
+                ReplayService._mark_match_failed(match_id, "Failed to fetch from Ballchasing.com")
+                return
+        except Exception as e:
+            logger.error("Error fetching replay stats", ballchasing_id=ballchasing_id, error=str(e))
+            ReplayService._mark_match_failed(match_id, f"Error fetching replay: {str(e)}")
+            return
+
+        # Step 3: Process the replay data
+        try:
+            # Extract match information
+            match_info_data = replay_stats.get("match_info", {})
+            score = match_info_data.get("score", {})
+
+            # Find user's stats in the replay
+            user_stats = ballchasing_service.extract_player_stats_for_user(replay_stats, user_steam_id)
+
+            # Prepare match updates
+            match_updates = {
+                'playlist': match_info_data.get("playlist", "unknown"),
+                'duration': match_info_data.get("duration", 0),
+                'score_team_0': score.get("blue", 0),
+                'score_team_1': score.get("orange", 0),
+                'replay_data': replay_stats,
+                'processed': True,
+                'processed_at': datetime.now(datetime.timezone.utc)
+            }
+
+            # Parse match date
+            try:
+                if match_info_data.get("date"):
+                    match_updates['match_date'] = datetime.fromisoformat(match_info_data["date"].replace("Z", "+00:00"))
+                else:
+                    match_updates['match_date'] = datetime.now(datetime.timezone.utc)
+            except:
+                match_updates['match_date'] = datetime.now(datetime.timezone.utc)
+
+            # Find user's stats in the replay
+            user_stats = ballchasing_service.extract_player_stats_for_user(replay_stats, user_steam_id)
+            if user_stats:
+                # Add player stats to updates
+                match_updates.update({
+                    'goals': user_stats.get("goals", 0),
+                    'assists': user_stats.get("assists", 0),
+                    'saves': user_stats.get("saves", 0),
+                    'shots': user_stats.get("shots", 0),
+                    'score': user_stats.get("score", 0),
+                    'boost_usage': user_stats.get("boost_usage", 0.0),
+                    'average_speed': user_stats.get("average_speed", 0.0),
+                    'time_supersonic': user_stats.get("time_supersonic", 0.0),
+                    'time_on_ground': user_stats.get("time_on_ground", 0.0),
+                    'time_low_air': user_stats.get("time_low_air", 0.0),
+                    'time_high_air': user_stats.get("time_high_air", 0.0)
+                })
+
+                # Determine result based on team and score
+                user_team = user_stats.get("team", "blue")
+                if user_team == "blue":
+                    match_updates['result'] = "win" if score.get("blue", 0) > score.get("orange", 0) else "loss"
+                else:
+                    match_updates['result'] = "win" if score.get("orange", 0) > score.get("blue", 0) else "loss"
+
+                if score.get("blue", 0) == score.get("orange", 0):
+                    match_updates['result'] = "draw"
+            else:
+                logger.warning("User not found in replay", ballchasing_id=ballchasing_id, user_steam_id=user_steam_id)
+                match_updates['result'] = "unknown"
+
+        except Exception as e:
+            logger.error("Error processing replay data", ballchasing_id=ballchasing_id, error=str(e))
+            ReplayService._mark_match_failed(match_id, f"Error processing replay: {str(e)}")
+            return
+
+        # Step 4: Update the database with a fresh, short transaction
+        ReplayService._update_match_with_data(match_id, match_updates)
+        logger.info("Ballchasing replay processed successfully", match_id=match_id, ballchasing_id=ballchasing_id)
+
+    @staticmethod
+    def _mark_match_failed(match_id: str, error_message: str):
+        """Mark a match as failed with error message."""
+        db = SessionLocal()
+        try:
             match = db.query(Match).filter(Match.id == match_id).first()
             if match:
                 match.processed = True
-                match.processed_at = datetime.utcnow()
-                match.replay_data = {"error": str(e), "status": "failed"}
+                match.processed_at = datetime.now(timezone.utc)
+                match.replay_data = {"error": error_message, "status": "failed"}
                 db.commit()
+                logger.info("Match marked as failed", match_id=match_id, error=error_message)
+        except Exception as e:
+            logger.error("Failed to mark match as failed", match_id=match_id, error=str(e))
+            db.rollback()
         finally:
             db.close()
-    
+
+    @staticmethod
+    def _update_match_with_data(match_id: str, match_updates: Dict[str, Any]):
+        """Update match with processed data using a fresh transaction."""
+        db = SessionLocal()
+        try:
+            match = db.query(Match).filter(Match.id == match_id).first()
+            if match:
+                # Update all fields
+                for field, value in match_updates.items():
+                    setattr(match, field, value)
+
+                db.commit()
+                logger.info("Match updated successfully", match_id=match_id,
+                          playlist=match_updates.get('playlist'),
+                          duration=match_updates.get('duration'),
+                          goals=match_updates.get('goals', 0))
+            else:
+                logger.error("Match not found for update", match_id=match_id)
+        except Exception as e:
+            logger.error("Failed to update match", match_id=match_id, error=str(e))
+            db.rollback()
+        finally:
+            db.close()
+
+    @staticmethod
+    async def _create_player_stats_record(match: Match, user_stats: Optional[Dict[str, Any]], replay_stats: Dict[str, Any]):
+        """Create detailed player stats records in the time-series database."""
+        if not user_stats:
+            return
+
+        # Use a new database session for player stats
+        db = SessionLocal()
+        try:
+            # Create player stats record for time-series analysis
+            player_stat = PlayerStats(
+                time=match.match_date,
+                user_id=match.user_id,
+                match_id=match.id,
+                stat_type="match_performance",
+                category="core",
+                value=float(user_stats.get("score", 0)),
+                playlist=match.playlist,
+                sample_size=1.0
+            )
+            db.add(player_stat)
+
+            # Add individual stat records for detailed analysis
+            stats_to_record = [
+                ("goals", "core", user_stats.get("goals", 0)),
+                ("assists", "core", user_stats.get("assists", 0)),
+                ("saves", "core", user_stats.get("saves", 0)),
+                ("shots", "core", user_stats.get("shots", 0)),
+                ("boost_usage", "boost", user_stats.get("boost_usage", 0.0)),
+                ("average_speed", "movement", user_stats.get("average_speed", 0.0)),
+                ("time_supersonic", "movement", user_stats.get("time_supersonic", 0.0)),
+                ("time_on_ground", "positioning", user_stats.get("time_on_ground", 0.0)),
+                ("time_low_air", "positioning", user_stats.get("time_low_air", 0.0)),
+                ("time_high_air", "positioning", user_stats.get("time_high_air", 0.0)),
+            ]
+
+            for stat_name, category, value in stats_to_record:
+                if value is not None:
+                    stat_record = PlayerStats(
+                        time=match.match_date,
+                        user_id=match.user_id,
+                        match_id=match.id,
+                        stat_type=stat_name,
+                        category=category,
+                        value=float(value),
+                        playlist=match.playlist,
+                        sample_size=1.0
+                    )
+                    db.add(stat_record)
+
+            db.commit()
+            logger.info("Player stats records created", match_id=str(match.id), stats_count=len(stats_to_record) + 1)
+
+        except Exception as e:
+            logger.error("Failed to create player stats records", match_id=str(match.id), error=str(e))
+            db.rollback()
+        finally:
+            db.close()
+
     @staticmethod
     def _mock_replay_analysis(filename: str) -> Dict[str, Any]:
         """Create mock replay analysis data for MVP."""

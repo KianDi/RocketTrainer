@@ -2,6 +2,7 @@
 Replay management endpoints for uploading and analyzing Rocket League replays.
 """
 from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -11,8 +12,9 @@ from app.database import get_db
 from app.models.user import User
 from app.models.match import Match
 from app.api.auth import get_current_user
-from app.schemas.replay import ReplayResponse, ReplayUpload, ReplayAnalysis
+from app.schemas.replay import ReplayResponse, ReplayUpload, ReplayAnalysis, ReplaySearchRequest, ReplaySearchResponse
 from app.services.replay_service import ReplayService
+from app.services.ballchasing_service import ballchasing_service
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -117,6 +119,7 @@ async def import_from_ballchasing(
             ballchasing_id=replay_data.ballchasing_id,
             playlist="unknown",  # Will be updated after processing
             duration=0,  # Will be updated after processing
+            match_date=datetime.utcnow(),  # Temporary date, will be updated after processing
             score_team_0=0,  # Will be updated after processing
             score_team_1=0,  # Will be updated after processing
             result="unknown",  # Will be updated after processing
@@ -258,4 +261,116 @@ async def delete_replay(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete replay"
+        )
+
+
+@router.post("/search-ballchasing", response_model=ReplaySearchResponse)
+async def search_ballchasing_replays(
+    search_request: ReplaySearchRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Search for replays on Ballchasing.com."""
+    try:
+        # Use the user's Steam ID if no player name provided
+        player_name = search_request.player_name
+        if not player_name and current_user.steam_id:
+            # Convert Steam ID to player name if needed
+            player_name = current_user.username
+
+        search_results = await ballchasing_service.search_replays(
+            player_name=player_name,
+            playlist=search_request.playlist,
+            season=search_request.season,
+            count=search_request.count,
+            sort_by=search_request.sort_by,
+            sort_dir=search_request.sort_dir
+        )
+
+        if not search_results:
+            return ReplaySearchResponse(
+                replays=[],
+                count=0,
+                message="No replays found or search failed"
+            )
+
+        # Transform results to our format
+        replays = []
+        for replay in search_results.get("list", []):
+            replays.append({
+                "id": replay.get("id", ""),
+                "title": replay.get("title", "Untitled"),
+                "playlist": replay.get("playlist_name", "unknown"),
+                "duration": replay.get("duration", 0),
+                "date": replay.get("date", ""),
+                "blue_score": replay.get("blue", {}).get("goals", 0),
+                "orange_score": replay.get("orange", {}).get("goals", 0),
+                "uploader": replay.get("uploader", {}).get("name", "Unknown")
+            })
+
+        logger.info(
+            "Ballchasing search completed",
+            user_id=str(current_user.id),
+            results_count=len(replays)
+        )
+
+        return ReplaySearchResponse(
+            replays=replays,
+            count=len(replays),
+            message=f"Found {len(replays)} replays"
+        )
+
+    except Exception as e:
+        logger.error("Ballchasing search failed", user_id=str(current_user.id), error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search replays"
+        )
+
+
+@router.get("/ballchasing/{replay_id}/preview")
+async def preview_ballchasing_replay(
+    replay_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Preview a Ballchasing.com replay before importing."""
+    try:
+        replay_stats = await ballchasing_service.get_replay_stats(replay_id)
+        if not replay_stats:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Replay not found on Ballchasing.com"
+            )
+
+        match_info = replay_stats.get("match_info", {})
+        players = replay_stats.get("players", [])
+
+        # Find user in the replay if possible
+        user_in_replay = None
+        if current_user.steam_id:
+            user_stats = ballchasing_service.extract_player_stats_for_user(replay_stats, current_user.steam_id)
+            if user_stats:
+                user_in_replay = {
+                    "found": True,
+                    "team": user_stats.get("team", "unknown"),
+                    "score": user_stats.get("score", 0),
+                    "goals": user_stats.get("goals", 0),
+                    "assists": user_stats.get("assists", 0),
+                    "saves": user_stats.get("saves", 0)
+                }
+
+        return {
+            "replay_id": replay_id,
+            "match_info": match_info,
+            "players_count": len(players),
+            "user_in_replay": user_in_replay or {"found": False},
+            "can_import": True
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Ballchasing preview failed", replay_id=replay_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to preview replay"
         )

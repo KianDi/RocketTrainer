@@ -9,12 +9,16 @@ import redis.asyncio as redis
 
 from app.config import settings
 
-# SQLAlchemy setup
+# SQLAlchemy setup with TimescaleDB-compatible configuration
+# Use standard PostgreSQL connection settings to avoid TimescaleDB session conflicts
 engine = create_engine(
     settings.database_url,
-    poolclass=StaticPool,
     pool_pre_ping=True,
     echo=settings.debug,
+    # Use connection pooling settings that work better with TimescaleDB
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=3600
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

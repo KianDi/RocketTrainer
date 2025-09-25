@@ -1,9 +1,9 @@
 """
 Replay schemas for request/response validation.
 """
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ReplayUpload(BaseModel):
@@ -60,3 +60,32 @@ class ReplayAnalysis(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReplaySearchRequest(BaseModel):
+    """Schema for searching Ballchasing.com replays."""
+    player_name: Optional[str] = None
+    playlist: Optional[str] = Field(None, description="Playlist filter (e.g., 'ranked-duels')")
+    season: Optional[str] = Field(None, description="Season filter")
+    count: int = Field(10, ge=1, le=200, description="Number of replays to return")
+    sort_by: str = Field("replay-date", description="Sort field")
+    sort_dir: str = Field("desc", description="Sort direction (asc/desc)")
+
+
+class BallchasingReplayInfo(BaseModel):
+    """Schema for Ballchasing.com replay information."""
+    id: str
+    title: str
+    playlist: str
+    duration: int
+    date: str
+    blue_score: int
+    orange_score: int
+    uploader: str
+
+
+class ReplaySearchResponse(BaseModel):
+    """Schema for Ballchasing.com search results."""
+    replays: List[BallchasingReplayInfo]
+    count: int
+    message: str
