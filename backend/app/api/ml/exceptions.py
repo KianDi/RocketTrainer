@@ -336,23 +336,35 @@ def log_ml_error(error: MLModelError, context: Optional[Dict[str, Any]] = None):
 def handle_ml_exception(error: Exception, context: Optional[Dict[str, Any]] = None) -> HTTPException:
     """
     Handle any exception and convert to appropriate ML error.
-    
+
     Args:
         error: Exception to handle
         context: Additional context
-        
+
     Returns:
         HTTPException for FastAPI response
     """
     if isinstance(error, MLModelError):
         log_ml_error(error, context)
         return error.to_http_exception()
-    
+
+    # Pass through HTTPExceptions as-is (they're already properly formatted)
+    if isinstance(error, HTTPException):
+        # Log the HTTPException for monitoring
+        log_context = context or {}
+        log_context.update({
+            "error_type": "HTTPException",
+            "status_code": error.status_code,
+            "detail": error.detail
+        })
+        logger.error("HTTP exception in ML operation", **log_context)
+        return error
+
     # Convert generic exceptions to ML errors
     ml_error = MLModelError(
         message=f"Unexpected error: {str(error)}",
         details={"original_error": str(error), "error_type": error.__class__.__name__}
     )
-    
+
     log_ml_error(ml_error, context)
     return ml_error.to_http_exception()

@@ -1,0 +1,120 @@
+{
+  "total_tests": 16,
+  "passed_tests": 16,
+  "success_rate": 100.0,
+  "results": {
+    "functional": {
+      "model_status_endpoint": {
+        "success": true,
+        "details": "System status: error",
+        "duration_ms": 19.4,
+        "timestamp": "2025-09-25T18:44:21.266702"
+      },
+      "weakness_analysis_validation": {
+        "success": true,
+        "details": "Proper error handling: User not found",
+        "duration_ms": 63.7,
+        "timestamp": "2025-09-25T18:44:21.337421"
+      },
+      "training_recommendation_validation": {
+        "success": true,
+        "details": "Proper error handling: User not found",
+        "duration_ms": 14.85,
+        "timestamp": "2025-09-25T18:44:21.352369"
+      }
+    },
+    "integration": {
+      "model_manager_status": {
+        "success": true,
+        "details": "Models configured: 3",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:22.629382"
+      },
+      "model_health_check": {
+        "success": true,
+        "details": "Overall status: healthy",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:22.629461"
+      },
+      "cache_health_check": {
+        "success": true,
+        "details": "Redis cache connectivity",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:22.647443"
+      }
+    },
+    "caching": {
+      "model_status_cache": {
+        "success": true,
+        "details": "First: 19.4ms, Second: 6.7ms",
+        "duration_ms": 6.75,
+        "timestamp": "2025-09-25T18:44:21.273542"
+      }
+    },
+    "error_handling": {
+      "invalid_uuid_format": {
+        "success": true,
+        "details": "Properly rejected invalid UUID format",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:21.359378"
+      },
+      "invalid_categories": {
+        "success": true,
+        "details": "Properly rejected invalid categories",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:21.368812"
+      },
+      "missing_required_fields": {
+        "success": true,
+        "details": "Properly rejected missing required fields",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:21.374224"
+      }
+    },
+    "performance": {
+      "weakness_analysis_response_time": {
+        "success": true,
+        "details": "Response time: 63.7ms",
+        "duration_ms": 63.7,
+        "timestamp": "2025-09-25T18:44:21.337469"
+      },
+      "training_recommendation_response_time": {
+        "success": true,
+        "details": "Response time: 14.8ms",
+        "duration_ms": 14.85,
+        "timestamp": "2025-09-25T18:44:21.352494"
+      }
+    },
+    "database": {
+      "test_data_setup": {
+        "success": true,
+        "details": "Test user ID: 123e4567-e89b-12d3-a456-426614174000",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:21.247131"
+      }
+    },
+    "documentation": {
+      "openapi_ml_endpoints": {
+        "success": true,
+        "details": "All ML endpoints documented: 3",
+        "duration_ms": 129.75,
+        "timestamp": "2025-09-25T18:44:21.505946"
+      },
+      "swagger_ui_available": {
+        "success": true,
+        "details": "Swagger UI accessible",
+        "duration_ms": 0,
+        "timestamp": "2025-09-25T18:44:21.507614"
+      }
+    },
+    "connectivity": {
+      "basic_api_access": {
+        "success": true,
+        "details": "API version: 1.0.0",
+        "duration_ms": 83.07,
+        "timestamp": "2025-09-25T18:44:21.247080"
+      }
+    }
+  },
+  "timestamp": "2025-09-25T18:44:22.647638"
+}
