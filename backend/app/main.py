@@ -2,14 +2,17 @@
 RocketTrainer FastAPI application main module.
 """
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 import structlog
 
 from app.config import settings
 from app.database import init_db, close_db
 from app.api import auth, users, replays, training, health
+from app.api.ml import router as ml_router
+from app.api.ml.exceptions import MLModelError
 
 
 # Configure structured logging
@@ -70,12 +73,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ML-specific exception handlers
+@app.exception_handler(MLModelError)
+async def ml_error_handler(request: Request, exc: MLModelError):
+    """Handle ML model errors with structured responses."""
+    logger.error("ML model error occurred",
+                error_type=exc.__class__.__name__,
+                error_message=exc.message,
+                path=request.url.path)
+
+    return exc.to_http_exception()
+
+
 # Include API routers
 app.include_router(health.router, tags=["health"])
 app.include_router(auth.router, prefix="/auth", tags=["authentication"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(replays.router, prefix="/replays", tags=["replays"])
 app.include_router(training.router, prefix="/training", tags=["training"])
+app.include_router(ml_router, prefix="/api", tags=["machine-learning"])
 
 
 @app.get("/")
