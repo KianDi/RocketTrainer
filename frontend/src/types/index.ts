@@ -87,3 +87,127 @@ export interface NavbarProps {
   user?: User;
   onLogout: () => void;
 }
+
+// ML API Types
+export interface SkillCategoryScore {
+  category: string;
+  score: number;
+  confidence: number;
+  description: string;
+}
+
+export interface WeaknessAnalysisRequest {
+  user_id: string;
+  match_ids?: string[];
+  include_confidence?: boolean;
+  analysis_depth?: 'quick' | 'standard' | 'detailed';
+}
+
+export interface WeaknessAnalysisResponse {
+  user_id: string;
+  analysis_id: string;
+  primary_weakness: string;
+  secondary_weakness: string;
+  confidence: number;
+  skill_scores: SkillCategoryScore[];
+  improvement_potential: number;
+  matches_analyzed: number;
+  recommendations: string[];
+  analysis_timestamp: string;
+  cache_hit: boolean;
+  processing_time_ms: number;
+}
+
+export interface TrainingRecommendationRequest {
+  user_id: string;
+  skill_level?: string;
+  max_recommendations?: number;
+  focus_areas?: string[];
+}
+
+export interface TrainingRecommendationItem {
+  training_pack_id: string;
+  name: string;
+  description: string;
+  difficulty: string;
+  category: string;
+  code: string;
+  creator: string;
+  relevance_score: number;
+  reasoning: string;
+  estimated_improvement: number;
+  time_investment: string;
+}
+
+export interface TrainingRecommendationResponse {
+  user_id: string;
+  recommendation_id: string;
+  skill_level: string;
+  recommendations: TrainingRecommendationItem[];
+  total_recommendations: number;
+  personalization_score: number;
+  cache_hit: boolean;
+  processing_time_ms: number;
+  generated_at: string;
+}
+
+export interface ModelInfo {
+  name: string;
+  version: string;
+  status: string;
+  last_trained?: string;
+  accuracy?: number;
+  predictions_served: number;
+  avg_response_time: number;
+}
+
+export interface CacheStatistics {
+  total_requests: number;
+  cache_hits: number;
+  cache_misses: number;
+  hit_rate: number;
+  avg_cache_time: number;
+}
+
+export interface DatabasePoolStatistics {
+  pool_size: number;
+  checked_in_connections: number;
+  checked_out_connections: number;
+  overflow_connections: number;
+  invalid_connections: number;
+  total_connections: number;
+  utilization_percent: number;
+}
+
+export interface RateLimitStatistics {
+  total_tracked_users: number;
+  total_rate_limit_keys: number;
+  endpoints: Record<string, number>;
+  rate_limiter_healthy: boolean;
+}
+
+export interface ModelStatusResponse {
+  system_status: string;
+  models: ModelInfo[];
+  cache_stats: CacheStatistics;
+  database_pool: DatabasePoolStatistics;
+  rate_limit_stats: RateLimitStatistics;
+  uptime: number;
+  memory_usage: number;
+  last_health_check: string;
+}
+
+// ML API Error Types
+export interface MLApiError {
+  error: string;
+  message: string;
+  details?: Record<string, any>;
+  timestamp: string;
+}
+
+export interface RateLimitError extends MLApiError {
+  limit: number;
+  remaining: number;
+  reset_time: number;
+  retry_after?: number;
+}
