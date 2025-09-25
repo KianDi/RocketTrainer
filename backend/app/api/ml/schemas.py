@@ -204,7 +204,7 @@ class ModelInfo(BaseModel):
 
 class CacheStatistics(BaseModel):
     """Cache performance statistics."""
-    
+
     total_requests: int = Field(..., ge=0, description="Total cache requests")
     cache_hits: int = Field(..., ge=0, description="Number of cache hits")
     cache_misses: int = Field(..., ge=0, description="Number of cache misses")
@@ -212,12 +212,25 @@ class CacheStatistics(BaseModel):
     avg_cache_time: float = Field(..., ge=0.0, description="Average cache retrieval time in milliseconds")
 
 
+class DatabasePoolStatistics(BaseModel):
+    """Database connection pool statistics."""
+
+    pool_size: int = Field(..., ge=0, description="Base connection pool size")
+    checked_in_connections: int = Field(..., ge=0, description="Available connections")
+    checked_out_connections: int = Field(..., ge=0, description="Active connections")
+    overflow_connections: int = Field(..., ge=0, description="Overflow connections")
+    invalid_connections: int = Field(..., ge=0, description="Invalid connections")
+    total_connections: int = Field(..., ge=0, description="Total connections")
+    utilization_percent: float = Field(..., ge=0.0, le=100.0, description="Pool utilization percentage")
+
+
 class ModelStatusResponse(BaseModel):
     """Response schema for model status."""
-    
+
     system_status: str = Field(..., description="Overall system status")
     models: List[ModelInfo] = Field(..., description="Status of all ML models")
     cache_stats: CacheStatistics = Field(..., description="Cache performance statistics")
+    database_pool: DatabasePoolStatistics = Field(..., description="Database connection pool statistics")
     uptime: float = Field(..., ge=0.0, description="System uptime in seconds")
     memory_usage: float = Field(..., ge=0.0, le=100.0, description="Memory usage percentage")
     last_health_check: datetime = Field(..., description="Last health check timestamp")

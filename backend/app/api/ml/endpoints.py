@@ -474,15 +474,20 @@ async def get_model_status() -> ModelStatusResponse:
             logger.info("Returning cached model status")
 
             # Convert cached result to response model
-            from .schemas import ModelInfo, CacheStatistics
+            from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics
 
             models = [ModelInfo(**model) for model in cached_status["models"]]
             cache_stats = CacheStatistics(**cached_status["cache_stats"])
+
+            # Get fresh database pool stats (don't cache these as they change rapidly)
+            from app.database import get_db_pool_status
+            db_pool_stats = DatabasePoolStatistics(**get_db_pool_status())
 
             return ModelStatusResponse(
                 system_status=cached_status["system_status"],
                 models=models,
                 cache_stats=cache_stats,
+                database_pool=db_pool_stats,
                 uptime=cached_status["uptime"],
                 memory_usage=cached_status["memory_usage"],
                 last_health_check=datetime.fromisoformat(cached_status["last_health_check"])
@@ -532,7 +537,7 @@ async def get_model_status() -> ModelStatusResponse:
             models.append(model_info)
 
         # Build cache statistics
-        from .schemas import CacheStatistics
+        from .schemas import CacheStatistics, DatabasePoolStatistics
         cache_stats = CacheStatistics(
             total_requests=cache_statistics.get("total_keys", 0) * 10,  # Estimate
             cache_hits=int(cache_statistics.get("total_keys", 0) * 8),  # Estimate 80% hit rate
@@ -541,20 +546,31 @@ async def get_model_status() -> ModelStatusResponse:
             avg_cache_time=5.0  # ms
         )
 
+        # Get database pool statistics
+        from app.database import get_db_pool_status
+        db_pool_stats = DatabasePoolStatistics(**get_db_pool_status())
+
         # Determine overall system status
         overall_status = health_check_results["overall_status"]
+
+        # Check if database pool is under stress
+        if db_pool_stats.utilization_percent > 80:
+            overall_status = "warning"
+            logger.warning("Database pool utilization high",
+                         utilization=db_pool_stats.utilization_percent)
 
         # Create response
         response = ModelStatusResponse(
             system_status=overall_status,
             models=models,
             cache_stats=cache_stats,
+            database_pool=db_pool_stats,
             uptime=uptime,
             memory_usage=memory_usage,
             last_health_check=datetime.utcnow()
         )
 
-        # Cache the result
+        # Cache the result (excluding database pool stats as they change rapidly)
         cache_data = {
             "system_status": response.system_status,
             "models": [model.dict() for model in response.models],
@@ -566,12 +582,14 @@ async def get_model_status() -> ModelStatusResponse:
 
         cache.cache_model_status(cache_data)
 
-        # Log performance
+        # Log performance with database pool metrics
         duration = (datetime.utcnow() - start_time).total_seconds() * 1000
         logger.info("Model status completed",
                    duration_ms=duration,
                    system_status=overall_status,
-                   models_count=len(models))
+                   models_count=len(models),
+                   db_pool_utilization=db_pool_stats.utilization_percent,
+                   db_active_connections=db_pool_stats.checked_out_connections)
 
         return response
 
@@ -579,7 +597,22 @@ async def get_model_status() -> ModelStatusResponse:
         logger.error("Model status check failed", error=str(e))
 
         # Return degraded status on error
-        from .schemas import ModelInfo, CacheStatistics
+        from .schemas import ModelInfo, CacheStatistics, DatabasePoolStatistics
+
+        # Try to get database pool stats even on error
+        try:
+            from app.database import get_db_pool_status
+            db_pool_stats = DatabasePoolStatistics(**get_db_pool_status())
+        except Exception:
+            db_pool_stats = DatabasePoolStatistics(
+                pool_size=0,
+                checked_in_connections=0,
+                checked_out_connections=0,
+                overflow_connections=0,
+                invalid_connections=0,
+                total_connections=0,
+                utilization_percent=0.0
+            )
 
         error_response = ModelStatusResponse(
             system_status="error",
@@ -601,6 +634,7 @@ async def get_model_status() -> ModelStatusResponse:
                 hit_rate=0.0,
                 avg_cache_time=0.0
             ),
+            database_pool=db_pool_stats,
             uptime=0.0,
             memory_usage=0.0,
             last_health_check=datetime.utcnow()

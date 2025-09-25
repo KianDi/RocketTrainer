@@ -1,0 +1,78 @@
+{
+  "overall_status": "fail",
+  "critical_issues": [
+    "20_concurrent_users: 30996.6ms (>500ms)"
+  ],
+  "warnings": [],
+  "detailed_results": {
+    "single_request_performance": {
+      "model_status": {
+        "avg_response_time_ms": 1.5507936477661133,
+        "median_response_time_ms": 0.8217096328735352,
+        "p95_response_time_ms": 8.108139038085938,
+        "p99_response_time_ms": 8.108139038085938,
+        "min_response_time_ms": 0.7350444793701172,
+        "max_response_time_ms": 8.108139038085938,
+        "success_rate": 1.0,
+        "total_requests": 10,
+        "timestamp": "2025-09-25T19:02:25.565310"
+      },
+      "weakness_analysis": {
+        "avg_response_time_ms": 5.374717712402344,
+        "median_response_time_ms": 0.7382631301879883,
+        "p95_response_time_ms": 46.65207862854004,
+        "p99_response_time_ms": 46.65207862854004,
+        "min_response_time_ms": 0.6422996520996094,
+        "max_response_time_ms": 46.65207862854004,
+        "success_rate": 1.0,
+        "total_requests": 10,
+        "timestamp": "2025-09-25T19:02:25.619122"
+      },
+      "training_recommendations": {
+        "avg_response_time_ms": 1.6198158264160156,
+        "median_response_time_ms": 0.727534294128418,
+        "p95_response_time_ms": 9.406566619873047,
+        "p99_response_time_ms": 9.406566619873047,
+        "min_response_time_ms": 0.675201416015625,
+        "max_response_time_ms": 9.406566619873047,
+        "success_rate": 1.0,
+        "total_requests": 10,
+        "timestamp": "2025-09-25T19:02:25.635383"
+      }
+    },
+    "concurrent_load_tests": {
+      "20_concurrent_users": {
+        "total_requests": 40,
+        "successful_requests": 40,
+        "failed_requests": 0,
+        "success_rate": 1.0,
+        "avg_response_time_ms": 30996.600276231766,
+        "median_response_time_ms": 30996.47068977356,
+        "p95_response_time_ms": 30999.1512298584,
+        "p99_response_time_ms": 30999.589204788208,
+        "max_response_time_ms": 30999.589204788208,
+        "requests_per_second": 1.290091547030229,
+        "total_test_duration_seconds": 31.00555157661438,
+        "concurrent_users": 20,
+        "requests_per_user": 2,
+        "timestamp": "2025-09-25T19:03:27.138715"
+      }
+    },
+    "cache_performance": {
+      "redis_cache_effectiveness": {
+        "cache_miss_time_ms": 1.2540817260742188,
+        "cache_hit_time_ms": 0.7109642028808594,
+        "avg_cache_hit_time_ms": 0.6789445877075195,
+        "cache_performance_improvement_percent": 43.30798479087453,
+        "cache_consistency": true,
+        "success_rate": 1.0,
+        "avg_response_time_ms": 0.6789445877075195,
+        "timestamp": "2025-09-25T19:02:25.644499"
+      }
+    },
+    "database_performance": {},
+    "system_resource_usage": {},
+    "error_rate_analysis": {}
+  },
+  "timestamp": "2025-09-25T19:03:27.139403"
+}
