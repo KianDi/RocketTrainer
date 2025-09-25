@@ -1,99 +1,135 @@
 """
-Training service for managing training recommendations and progress tracking.
+Training Service for RocketTrainer.
+
+Provides comprehensive training pack management and recommendation services.
+Integrates with ML models to provide personalized training recommendations.
 """
-from typing import List, Dict, Any
+
+from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import and_, or_, func, desc
 import structlog
 
-from app.models.user import User
 from app.models.training_pack import TrainingPack
 from app.models.training_session import TrainingSession
 from app.models.match import Match
+from app.models.user import User
 from app.schemas.training import TrainingRecommendation, TrainingPackResponse
+from app.ml.models.weakness_detector import WeaknessDetector
+from app.ml.models.skill_analyzer import SkillAnalyzer
+from app.ml.models.recommendation_engine import TrainingRecommendationEngine
 
 logger = structlog.get_logger()
 
 
 class TrainingService:
-    """Service for training recommendations and progress tracking."""
-    
-    @staticmethod
-    async def get_recommendations(user_id: str, db: Session) -> List[TrainingRecommendation]:
-        """Get personalized training pack recommendations for a user."""
+    """
+    Service for managing training packs and generating recommendations.
+
+    Provides:
+    1. Training pack discovery and filtering
+    2. Personalized recommendations based on ML analysis
+    3. Training session tracking and progress analysis
+    4. Performance improvement measurement
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.weakness_detector = None
+        self.skill_analyzer = None
+        self.recommendation_engine = None
+
+        logger.info("TrainingService initialized")
+
+    async def get_recommendations(self, user_id: str) -> List[TrainingRecommendation]:
+        """Get personalized training pack recommendations using ML analysis."""
         try:
-            user = db.query(User).filter(User.id == user_id).first()
+            user = self.db.query(User).filter(User.id == user_id).first()
             if not user:
                 return []
-            
-            # Get user's recent matches to analyze weaknesses
-            recent_matches = db.query(Match).filter(
-                Match.user_id == user_id,
-                Match.processed == True
-            ).order_by(desc(Match.created_at)).limit(10).all()
-            
-            # Get user's training history
-            training_history = db.query(TrainingSession).filter(
-                TrainingSession.user_id == user_id
-            ).order_by(desc(TrainingSession.completed_at)).limit(20).all()
-            
-            # Analyze weaknesses (simplified for MVP)
-            weaknesses = TrainingService._analyze_weaknesses(recent_matches)
-            
-            # Get training packs that address these weaknesses
+
+            # Get user's recent matches for ML analysis
+            recent_matches = self._get_user_recent_matches(user_id, limit=10)
+
+            if not recent_matches:
+                logger.warning("No recent matches found for user", user_id=user_id)
+                return await self._get_default_recommendations()
+
+            # Initialize ML models if needed
+            if not self.weakness_detector:
+                self.weakness_detector = WeaknessDetector()
+                self.weakness_detector.train(recent_matches)
+
+            if not self.skill_analyzer:
+                self.skill_analyzer = SkillAnalyzer()
+
+            if not self.recommendation_engine:
+                self.recommendation_engine = TrainingRecommendationEngine(self.db)
+
+            # Analyze player weaknesses using ML
+            weakness_analysis = self.weakness_detector.predict(recent_matches[:5])
+            skill_analysis = self.skill_analyzer.analyze_player_skills(recent_matches)
+
+            # Determine player skill level
+            player_skill_level = self._estimate_player_skill_level(recent_matches, skill_analysis)
+
+            # Generate ML-powered recommendations
+            ml_recommendations = self.recommendation_engine.recommend_training_packs(
+                user_id=user_id,
+                weaknesses=weakness_analysis,
+                player_skill_level=player_skill_level,
+                max_recommendations=5,
+                include_variety=True
+            )
+
+            # Convert to TrainingRecommendation format
             recommendations = []
-            
-            for weakness, confidence in weaknesses.items():
-                # Find training packs for this weakness category
-                packs = db.query(TrainingPack).filter(
-                    TrainingPack.category == weakness,
-                    TrainingPack.is_active == True
-                ).order_by(desc(TrainingPack.rating)).limit(3).all()
-                
-                for i, pack in enumerate(packs):
-                    recommendation = TrainingRecommendation(
-                        training_pack=TrainingPackResponse(
-                            id=str(pack.id),
-                            name=pack.name,
-                            code=pack.code,
-                            description=pack.description,
-                            creator=pack.creator,
-                            category=pack.category,
-                            subcategory=pack.subcategory,
-                            difficulty=pack.difficulty,
-                            skill_level=pack.skill_level,
-                            tags=pack.tags or [],
-                            shots_count=pack.shots_count,
-                            estimated_duration=pack.estimated_duration,
-                            rating=pack.rating,
-                            rating_count=pack.rating_count,
-                            usage_count=pack.usage_count,
-                            is_official=pack.is_official,
-                            is_featured=pack.is_featured
-                        ),
-                        reason=f"Improve your {weakness} skills",
-                        confidence=confidence,
-                        priority=i + 1,
-                        weakness_addressed=weakness,
-                        expected_improvement=confidence * 0.1  # Mock improvement estimate
-                    )
-                    recommendations.append(recommendation)
-            
-            # Sort by confidence and priority
-            recommendations.sort(key=lambda x: (x.confidence, -x.priority), reverse=True)
-            
-            return recommendations[:5]  # Return top 5 recommendations
+            for i, rec in enumerate(ml_recommendations):
+                pack = rec["pack"]
+                recommendation = TrainingRecommendation(
+                    training_pack=TrainingPackResponse(
+                        id=str(pack.id),
+                        name=pack.name,
+                        code=pack.code,
+                        description=pack.description,
+                        creator=pack.creator,
+                        category=pack.category,
+                        subcategory=pack.subcategory,
+                        difficulty=pack.difficulty,
+                        skill_level=pack.skill_level,
+                        tags=pack.tags or [],
+                        shots_count=pack.shots_count,
+                        estimated_duration=pack.estimated_duration,
+                        rating=pack.rating,
+                        rating_count=pack.rating_count,
+                        usage_count=pack.usage_count,
+                        is_official=pack.is_official,
+                        is_featured=pack.is_featured
+                    ),
+                    reason="; ".join(rec["reasoning"]) if rec["reasoning"] else f"Recommended for skill improvement",
+                    confidence=rec["total_score"],
+                    priority=i + 1,
+                    weakness_addressed=weakness_analysis[0]["category"] if weakness_analysis else "general",
+                    expected_improvement=rec["total_score"] * 0.15  # Estimated improvement based on score
+                )
+                recommendations.append(recommendation)
+
+            logger.info("ML-powered recommendations generated",
+                       user_id=user_id,
+                       recommendations_count=len(recommendations),
+                       weaknesses_detected=len(weakness_analysis))
+
+            return recommendations
             
         except Exception as e:
             logger.error("Failed to get training recommendations", user_id=user_id, error=str(e))
-            return []
-    
-    @staticmethod
-    async def get_user_progress(user_id: str, db: Session) -> Dict[str, Any]:
+            return await self._get_default_recommendations()
+
+    async def get_user_progress(self, user_id: str) -> Dict[str, Any]:
         """Get user's training progress and statistics."""
         try:
             # Get all training sessions
-            sessions = db.query(TrainingSession).filter(
+            sessions = self.db.query(TrainingSession).filter(
                 TrainingSession.user_id == user_id
             ).all()
             
@@ -157,7 +193,83 @@ class TrainingService:
         except Exception as e:
             logger.error("Failed to get user progress", user_id=user_id, error=str(e))
             return {}
-    
+
+    def _get_user_recent_matches(self, user_id: str, limit: int = 10) -> List[Match]:
+        """Get user's recent matches for analysis."""
+        return (self.db.query(Match)
+                .filter(Match.user_id == user_id)
+                .filter(Match.processed == True)
+                .order_by(Match.match_date.desc())
+                .limit(limit)
+                .all())
+
+    def _estimate_player_skill_level(
+        self,
+        matches: List[Match],
+        skill_analysis: Dict[str, Any]
+    ) -> str:
+        """Estimate player skill level based on performance."""
+        if not matches:
+            return "gold"
+
+        # Simple heuristic based on average performance
+        avg_score = sum(m.score for m in matches) / len(matches)
+        avg_goals = sum(m.goals for m in matches) / len(matches)
+        avg_saves = sum(m.saves for m in matches) / len(matches)
+
+        # Score-based estimation (rough approximation)
+        if avg_score > 800 and avg_goals > 2:
+            return "champion"
+        elif avg_score > 600 and avg_goals > 1.5:
+            return "diamond"
+        elif avg_score > 400 and avg_goals > 1:
+            return "platinum"
+        elif avg_score > 200:
+            return "gold"
+        else:
+            return "silver"
+
+    async def _get_default_recommendations(self) -> List[TrainingRecommendation]:
+        """Get default recommendations for users without match history."""
+        popular_packs = (self.db.query(TrainingPack)
+                        .filter(TrainingPack.is_active == True)
+                        .filter(TrainingPack.is_featured == True)
+                        .order_by(TrainingPack.rating.desc())
+                        .limit(5)
+                        .all())
+
+        recommendations = []
+        for i, pack in enumerate(popular_packs):
+            recommendation = TrainingRecommendation(
+                training_pack=TrainingPackResponse(
+                    id=str(pack.id),
+                    name=pack.name,
+                    code=pack.code,
+                    description=pack.description,
+                    creator=pack.creator,
+                    category=pack.category,
+                    subcategory=pack.subcategory,
+                    difficulty=pack.difficulty,
+                    skill_level=pack.skill_level,
+                    tags=pack.tags or [],
+                    shots_count=pack.shots_count,
+                    estimated_duration=pack.estimated_duration,
+                    rating=pack.rating,
+                    rating_count=pack.rating_count,
+                    usage_count=pack.usage_count,
+                    is_official=pack.is_official,
+                    is_featured=pack.is_featured
+                ),
+                reason="Popular community training pack",
+                confidence=0.7,
+                priority=i + 1,
+                weakness_addressed="general",
+                expected_improvement=0.1
+            )
+            recommendations.append(recommendation)
+
+        return recommendations
+
     @staticmethod
     def _analyze_weaknesses(matches: List[Match]) -> Dict[str, float]:
         """

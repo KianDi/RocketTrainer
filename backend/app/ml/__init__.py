@@ -21,7 +21,7 @@ __author__ = "RocketTrainer Team"
 from .config import MLConfig, ml_config, SkillCategory
 from .utils import ModelManager, DataValidator, PerformanceMonitor
 from .models.base import BaseMLModel
-from .models import WeaknessDetector, SkillAnalyzer
+from .models import WeaknessDetector, SkillAnalyzer, TrainingRecommendationEngine
 from .features import FeatureExtractor, DataPreprocessor, FeatureSelector
 from .features.pipeline import FeatureEngineeringPipeline
 
@@ -35,6 +35,7 @@ __all__ = [
     "BaseMLModel",
     "WeaknessDetector",
     "SkillAnalyzer",
+    "TrainingRecommendationEngine",
     "FeatureExtractor",
     "DataPreprocessor",
     "FeatureSelector",

@@ -10,9 +10,11 @@ Contains machine learning model implementations for RocketTrainer:
 from .base import BaseMLModel
 from .weakness_detector import WeaknessDetector
 from .skill_analyzer import SkillAnalyzer
+from .recommendation_engine import TrainingRecommendationEngine
 
 __all__ = [
     "BaseMLModel",
     "WeaknessDetector",
-    "SkillAnalyzer"
+    "SkillAnalyzer",
+    "TrainingRecommendationEngine"
 ]
