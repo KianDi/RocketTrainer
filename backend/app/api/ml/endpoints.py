@@ -162,26 +162,60 @@ async def analyze_weaknesses(
         skill_analysis = skill_analyzer.analyze_player_skills(matches)
 
         # Process results
-        primary_weakness = weakness_predictions.get("primary_weakness", "unknown")
-        confidence = weakness_predictions.get("confidence", 0.0)
+        # Extract primary weakness from the detailed analysis
+        primary_weaknesses = weakness_predictions.get("primary_weaknesses", {})
+        if primary_weaknesses:
+            # Get the top weakness (first item in the sorted dict)
+            primary_weakness = list(primary_weaknesses.keys())[0]
+            confidence = primary_weaknesses[primary_weakness].get("avg_confidence", 0.0)
+        else:
+            primary_weakness = "unknown"
+            confidence = weakness_predictions.get("analysis_confidence", 0.0)
 
         # Build skill category scores
         skill_categories = []
-        skill_scores = skill_analysis.get("skill_scores", {})
 
-        for category, score_data in skill_scores.items():
-            skill_categories.append(SkillCategoryScore(
-                category=category,
-                score=score_data.get("score", 0.0),
-                percentile=score_data.get("percentile"),
-                trend=score_data.get("trend")
-            ))
+        # Handle both trained model and statistical analysis formats
+        if "skill_categories" in skill_analysis:
+            # Trained model format
+            skill_scores = skill_analysis.get("skill_categories", {})
+            for category, score_data in skill_scores.items():
+                skill_categories.append(SkillCategoryScore(
+                    category=category,
+                    score=score_data.get("score", 0.0),
+                    percentile=score_data.get("percentile"),
+                    trend=score_data.get("trend", "stable")
+                ))
+        else:
+            # Statistical analysis format - create basic skill scores from weakness data
+            all_weaknesses = weakness_predictions.get("all_weaknesses", {})
+            for weakness, data in all_weaknesses.items():
+                # Convert weakness confidence to skill score (inverse relationship)
+                skill_score = max(0.0, 1.0 - data.get("avg_confidence", 0.5))
+                skill_categories.append(SkillCategoryScore(
+                    category=weakness,
+                    score=skill_score,
+                    percentile=skill_score * 100,
+                    trend="stable"
+                ))
 
         # Generate analysis summary
+        strengths = []
+        weaknesses = []
+
+        # Extract strengths and weaknesses from analysis
+        if "strengths_and_weaknesses" in skill_analysis:
+            strengths = [s.get("category", "") for s in skill_analysis["strengths_and_weaknesses"].get("strengths", [])]
+            weaknesses = [w.get("category", "") for w in skill_analysis["strengths_and_weaknesses"].get("weaknesses", [])]
+        else:
+            # Use weakness analysis data
+            all_weaknesses = weakness_predictions.get("all_weaknesses", {})
+            weaknesses = list(all_weaknesses.keys())[:2]  # Top 2 weaknesses
+
         analysis_summary = f"Analysis of {len(matches)} matches shows primary weakness in {primary_weakness} " \
                           f"with {confidence:.1%} confidence. " \
-                          f"Skill analysis reveals strengths in {skill_analysis.get('top_skills', [])} " \
-                          f"and areas for improvement in {skill_analysis.get('weak_skills', [])}."
+                          f"Skill analysis reveals strengths in {strengths} " \
+                          f"and areas for improvement in {weaknesses}."
 
         # Create response
         response = WeaknessAnalysisResponse(

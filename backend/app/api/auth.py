@@ -177,6 +177,53 @@ async def logout(current_user: User = Depends(get_current_user)):
     return {"message": "Successfully logged out"}
 
 
+@router.get("/debug-token/{username}")
+async def get_debug_token(username: str, db: Session = Depends(get_db)):
+    """
+    Get debug token for testing purposes.
+    Only available in development mode.
+    """
+    if not settings.debug:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Debug endpoints not available in production"
+        )
+
+    # Find or create test user
+    user = db.query(User).filter(User.username == username).first()
+
+    if not user:
+        # Create test user
+        user = User(
+            username=username,
+            email=f"{username}@test.example.com",
+            steam_id=f"test_steam_{username}",
+            platform="steam",
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        logger.info("Created debug test user", username=username, user_id=str(user.id))
+
+    # Create access token
+    access_token = AuthService.create_access_token(
+        data={"sub": str(user.id), "username": user.username}
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "user": {
+            "id": str(user.id),
+            "username": user.username,
+            "steam_id": user.steam_id,
+            "current_rank": user.current_rank
+        }
+    }
+
+
 @router.get("/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information."""

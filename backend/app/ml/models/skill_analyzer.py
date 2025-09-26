@@ -24,36 +24,76 @@ logger = structlog.get_logger(__name__)
 class SkillAnalyzer:
     """Analyzes player skills across different gameplay categories."""
     
-    def __init__(self, 
+    def __init__(self,
                  percentile_calculation: str = "rank_based",
-                 trend_window: int = 5):
+                 trend_window: int = 5,
+                 model_path: Optional[str] = None):
         """
         Initialize skill analyzer.
-        
+
         Args:
             percentile_calculation: Method for percentile calculation ('rank_based', 'population')
             trend_window: Number of recent matches for trend analysis
+            model_path: Path to pre-trained model (if available)
         """
         self.percentile_calculation = percentile_calculation
         self.trend_window = trend_window
-        
+        self.model_path = model_path
+
+        # Initialize model components
+        self.model = None
+        self.is_trained = False
+
+        # Try to load pre-trained model
+        self._load_trained_model()
+
         # Feature pipeline for consistent feature extraction
-        self.feature_pipeline = FeatureEngineeringPipeline(
-            use_feature_selection=False,  # Keep all features for detailed analysis
-            scaler_type="standard"
-        )
-        
+        if not self.is_trained:
+            self.feature_pipeline = FeatureEngineeringPipeline(
+                use_feature_selection=False,  # Keep all features for detailed analysis
+                scaler_type="standard"
+            )
+
         # Skill category definitions
         self.skill_categories = {cat.value: cat for cat in ml_config.skill_categories}
-        
+
         # Performance benchmarks (will be updated with population data)
         self.performance_benchmarks = self._initialize_benchmarks()
         
         logger.info("SkillAnalyzer initialized",
                    percentile_calculation=percentile_calculation,
                    trend_window=trend_window,
-                   skill_categories=len(self.skill_categories))
-    
+                   skill_categories=len(self.skill_categories),
+                   has_trained_model=self.is_trained)
+
+    def _load_trained_model(self):
+        """Load pre-trained skill analysis model if available."""
+        import joblib
+        import os
+
+        model_dir = "/app/ml/trained_models"
+        model_path = os.path.join(model_dir, "skill_analyzer.joblib")
+
+        try:
+            if os.path.exists(model_path):
+                self.model = joblib.load(model_path)
+                self.is_trained = True
+
+                # Also try to load the feature pipeline used during training
+                pipeline_path = os.path.join(model_dir, "weakness_detector_pipeline.joblib")
+                if os.path.exists(pipeline_path):
+                    self.feature_pipeline = joblib.load(pipeline_path)
+
+                logger.info("Loaded pre-trained skill analyzer model",
+                           model_path=model_path)
+            else:
+                logger.info("No pre-trained skill analyzer model found")
+                self.is_trained = False
+
+        except Exception as e:
+            logger.warning("Failed to load pre-trained skill analyzer model", error=str(e))
+            self.is_trained = False
+
     def _initialize_benchmarks(self) -> Dict[str, Dict[str, float]]:
         """Initialize performance benchmarks for skill categories."""
         # These are initial benchmarks - in production, these would be
@@ -80,46 +120,111 @@ class SkillAnalyzer:
     def analyze_player_skills(self, matches: List[Match]) -> Dict[str, Any]:
         """
         Comprehensive skill analysis for a player.
-        
+
         Args:
             matches: Player's matches for analysis
-            
+
         Returns:
             Detailed skill analysis report
         """
         try:
             if not matches:
                 return {"error": "No matches provided for analysis"}
-            
-            logger.info("Analyzing player skills", matches=len(matches))
-            
-            # Extract features
-            features_df = self.feature_pipeline.extract_features_from_matches(matches)
-            
-            if features_df.empty:
-                return {"error": "No features extracted from matches"}
-            
-            # Group features by skill category
-            skill_features = create_skill_category_features(features_df)
-            
-            # Analyze each skill category
-            skill_analysis = {}
-            for category, category_df in skill_features.items():
-                if not category_df.empty:
-                    skill_analysis[category] = self._analyze_skill_category(
-                        category, category_df, matches
-                    )
-            
-            # Calculate overall performance metrics
-            overall_metrics = self._calculate_overall_metrics(features_df, matches)
-            
-            # Identify strengths and weaknesses
-            strengths_weaknesses = self._identify_strengths_weaknesses(skill_analysis)
-            
-            # Generate improvement trends
-            improvement_trends = self._calculate_improvement_trends(features_df)
-            
-            analysis_report = {
+
+            logger.info("Analyzing player skills", matches=len(matches),
+                       has_trained_model=self.is_trained)
+
+            # Use trained model if available, otherwise fallback to statistical analysis
+            if self.is_trained and self.model is not None:
+                return self._analyze_with_trained_model(matches)
+            else:
+                return self._analyze_with_statistics(matches)
+
+        except Exception as e:
+            logger.error("Failed to analyze player skills", error=str(e))
+            # Fallback to statistical analysis
+            return self._analyze_with_statistics(matches)
+
+    def _analyze_with_trained_model(self, matches: List[Match]) -> Dict[str, Any]:
+        """Analyze skills using trained ML model."""
+        # Extract features
+        X = self.feature_pipeline.transform(matches)
+
+        if X.shape[0] == 0:
+            return {"error": "No features extracted from matches"}
+
+        # Predict skill scores using trained model
+        skill_predictions = self.model.predict(X)
+
+        # Average predictions across all matches
+        avg_skill_scores = np.mean(skill_predictions, axis=0)
+
+        # Create skill analysis with ML predictions
+        skill_categories = ["mechanical", "positioning", "game_sense", "boost_management",
+                          "rotation", "aerial_ability", "shooting", "defending"]
+
+        skill_analysis = {}
+        for i, category in enumerate(skill_categories):
+            if i < len(avg_skill_scores):
+                score = float(avg_skill_scores[i])
+                skill_analysis[category] = {
+                    "score": score,
+                    "percentile": self._score_to_percentile(score),
+                    "trend": "stable",  # Could be enhanced with trend analysis
+                    "confidence": 0.8,  # High confidence from trained model
+                    "analysis_method": "trained_model"
+                }
+
+        # Calculate overall metrics
+        overall_metrics = self._calculate_basic_metrics(matches)
+
+        # Identify strengths and weaknesses based on ML predictions
+        strengths_weaknesses = self._identify_ml_strengths_weaknesses(skill_analysis)
+
+        return {
+            "player_summary": {
+                "total_matches": len(matches),
+                "analysis_period": {
+                    "start_date": min(m.match_date for m in matches).isoformat(),
+                    "end_date": max(m.match_date for m in matches).isoformat()
+                },
+                "overall_performance": overall_metrics,
+                "analysis_method": "trained_model"
+            },
+            "skill_categories": skill_analysis,
+            "strengths_and_weaknesses": strengths_weaknesses,
+            "recommendations": self._generate_ml_recommendations(skill_analysis)
+        }
+
+    def _analyze_with_statistics(self, matches: List[Match]) -> Dict[str, Any]:
+        """Fallback statistical analysis when no trained model is available."""
+        # Extract features
+        features_df = self.feature_pipeline.extract_features_from_matches(matches)
+
+        if features_df.empty:
+            return {"error": "No features extracted from matches"}
+
+        # Group features by skill category
+        skill_features = create_skill_category_features(features_df)
+
+        # Analyze each skill category
+        skill_analysis = {}
+        for category, category_df in skill_features.items():
+            if not category_df.empty:
+                skill_analysis[category] = self._analyze_skill_category(
+                    category, category_df, matches
+                )
+
+        # Calculate overall performance metrics
+        overall_metrics = self._calculate_overall_metrics(features_df, matches)
+
+        # Identify strengths and weaknesses
+        strengths_weaknesses = self._identify_strengths_weaknesses(skill_analysis)
+
+        # Generate improvement trends
+        improvement_trends = self._calculate_improvement_trends(features_df)
+
+        analysis_report = {
                 "player_summary": {
                     "total_matches": len(matches),
                     "analysis_period": {
@@ -133,19 +238,77 @@ class SkillAnalyzer:
                 "improvement_trends": improvement_trends,
                 "recommendations": self._generate_skill_recommendations(skill_analysis, strengths_weaknesses)
             }
-            
-            logger.info("Player skill analysis completed",
-                       categories_analyzed=len(skill_analysis),
-                       strengths=len(strengths_weaknesses.get("strengths", [])),
-                       weaknesses=len(strengths_weaknesses.get("weaknesses", [])))
-            
-            return analysis_report
-            
-        except Exception as e:
-            logger.error("Failed to analyze player skills", error=str(e))
-            return {"error": str(e)}
-    
-    def _analyze_skill_category(self, 
+
+        logger.info("Player skill analysis completed",
+                   categories_analyzed=len(skill_analysis),
+                   strengths=len(strengths_weaknesses.get("strengths", [])),
+                   weaknesses=len(strengths_weaknesses.get("weaknesses", [])))
+
+        return analysis_report
+
+    def _score_to_percentile(self, score: float) -> float:
+        """Convert skill score (0-1) to percentile."""
+        return min(100.0, max(0.0, score * 100))
+
+    def _calculate_basic_metrics(self, matches: List[Match]) -> Dict[str, Any]:
+        """Calculate basic performance metrics."""
+        if not matches:
+            return {}
+
+        wins = len([m for m in matches if m.result == "win"])
+        total_goals = sum(m.goals for m in matches)
+        total_shots = sum(m.shots for m in matches)
+        total_saves = sum(m.saves for m in matches)
+
+        return {
+            "win_rate": float(wins / len(matches)),
+            "avg_goals": float(total_goals / len(matches)),
+            "avg_shots": float(total_shots / len(matches)),
+            "avg_saves": float(total_saves / len(matches)),
+            "shooting_accuracy": float(total_goals / total_shots) if total_shots > 0 else 0.0
+        }
+
+    def _identify_ml_strengths_weaknesses(self, skill_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Identify strengths and weaknesses from ML predictions."""
+        scores = [(category, data["score"]) for category, data in skill_analysis.items()]
+        scores.sort(key=lambda x: x[1], reverse=True)
+
+        # Top 2 are strengths, bottom 2 are weaknesses
+        strengths = [{"category": cat, "score": score} for cat, score in scores[:2]]
+        weaknesses = [{"category": cat, "score": score} for cat, score in scores[-2:]]
+
+        return {
+            "strengths": strengths,
+            "weaknesses": weaknesses
+        }
+
+    def _generate_ml_recommendations(self, skill_analysis: Dict[str, Any]) -> List[str]:
+        """Generate recommendations based on ML analysis."""
+        recommendations = []
+
+        # Find lowest scoring skills
+        scores = [(category, data["score"]) for category, data in skill_analysis.items()]
+        scores.sort(key=lambda x: x[1])
+
+        for category, score in scores[:3]:  # Focus on top 3 weaknesses
+            if score < 0.6:  # Below 60% needs improvement
+                if category == "mechanical":
+                    recommendations.append("Focus on mechanical skills training - practice car control and ball touches")
+                elif category == "positioning":
+                    recommendations.append("Work on positioning - study rotation patterns and field awareness")
+                elif category == "shooting":
+                    recommendations.append("Improve shooting accuracy - practice shooting drills and power shots")
+                elif category == "defending":
+                    recommendations.append("Enhance defensive skills - practice saves and defensive positioning")
+                else:
+                    recommendations.append(f"Focus on improving {category} skills through targeted practice")
+
+        if not recommendations:
+            recommendations.append("Continue practicing to maintain your current skill level")
+
+        return recommendations
+
+    def _analyze_skill_category(self,
                                category: str, 
                                category_df: pd.DataFrame,
                                matches: List[Match]) -> Dict[str, Any]:

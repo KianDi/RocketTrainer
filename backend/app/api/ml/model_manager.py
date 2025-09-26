@@ -99,15 +99,25 @@ class ModelManager:
             requires_db = config["requires_db"]
             
             # Initialize model based on requirements
+            model_dir = "/app/ml/trained_models"
+
             if requires_db:
                 if not self._db_session:
                     raise ModelLoadError(
-                        model_name, 
+                        model_name,
                         original_error="Database session required but not provided"
                     )
-                model_instance = model_class(self._db_session)
+                # Pass model path for models that support it
+                if model_name == "weakness_detector":
+                    model_instance = model_class(model_path=model_dir)
+                else:
+                    model_instance = model_class(self._db_session)
             else:
-                model_instance = model_class()
+                # Pass model path for models that support it
+                if model_name == "skill_analyzer":
+                    model_instance = model_class(model_path=model_dir)
+                else:
+                    model_instance = model_class()
             
             # Store model metadata
             self._model_metadata[model_name] = {

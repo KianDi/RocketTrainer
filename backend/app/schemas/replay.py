@@ -22,6 +22,7 @@ class ReplayResponse(BaseModel):
     result: Optional[str] = None
     uploaded_at: datetime
     processed_at: Optional[datetime] = None
+    task_id: Optional[str] = None
 
     class Config:
         from_attributes = True

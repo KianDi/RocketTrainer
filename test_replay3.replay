@@ -1,0 +1,3 @@
+This is a third test replay file for testing the fixed Celery task routing.
+The task routing issue has been resolved by updating task names to include full module paths.
+This should now be processed correctly by the Celery worker.

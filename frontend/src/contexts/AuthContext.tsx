@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     // Check for existing token on app load
-    const storedToken = localStorage.getItem('token');
+    const storedToken = localStorage.getItem('auth_token');
     if (storedToken) {
       setToken(storedToken);
       // Verify token and get user info
@@ -49,7 +49,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         })
         .catch(() => {
           // Token is invalid, remove it
-          localStorage.removeItem('token');
+          localStorage.removeItem('auth_token');
           setToken(null);
         })
         .finally(() => {
@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await authService.steamLogin(steamId, username);
       setToken(response.access_token);
       setUser(response.user);
-      localStorage.setItem('token', response.access_token);
+      localStorage.setItem('auth_token', response.access_token);
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
   };
 
   const value = {

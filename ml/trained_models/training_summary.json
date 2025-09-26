@@ -1,0 +1,43 @@
+{
+  "training_completed_at": "2025-09-25T22:18:01.429081",
+  "weakness_detector": {
+    "model_path": "/app/ml/trained_models/weakness_detector.joblib",
+    "train_accuracy": 0.4557083333333333,
+    "test_accuracy": 0.2628333333333333,
+    "cv_mean": 0.25104166666666666,
+    "cv_std": 0.004289845892077923,
+    "num_classes": 8,
+    "class_names": [
+      "aerial_ability",
+      "boost_management",
+      "defending",
+      "game_sense",
+      "mechanical",
+      "positioning",
+      "rotation",
+      "shooting"
+    ]
+  },
+  "skill_analyzer": {
+    "model_path": "/app/ml/trained_models/skill_analyzer.joblib",
+    "test_r2": 0.03864780019147772,
+    "overall_mse": 0.03041470222405625,
+    "num_skills": 8,
+    "skill_categories": [
+      "mechanical",
+      "positioning",
+      "game_sense",
+      "boost_management",
+      "rotation",
+      "aerial_ability",
+      "shooting",
+      "defending"
+    ]
+  },
+  "training_data": {
+    "num_players": 1000,
+    "matches_per_player": 30,
+    "total_samples": 30000,
+    "synthetic_data": true
+  }
+}

@@ -1,0 +1,74 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - generic [ref=e6]:
+      - link "RT RocketTrainer" [ref=e8] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e10] [cursor=pointer]: RT
+        - generic [ref=e11] [cursor=pointer]: RocketTrainer
+      - generic [ref=e12]:
+        - link "Home" [ref=e13] [cursor=pointer]:
+          - /url: /
+          - img [ref=e14] [cursor=pointer]
+          - generic [ref=e16] [cursor=pointer]: Home
+        - link "Login with Steam" [ref=e17] [cursor=pointer]:
+          - /url: /login
+  - main [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e21]:
+        - heading "Level Up Your Rocket League Game" [level=1] [ref=e22]:
+          - text: Level Up Your
+          - generic [ref=e23]: Rocket League
+          - text: Game
+        - paragraph [ref=e24]: AI-powered analysis of your replays identifies weaknesses and creates personalized training routines to boost your rank.
+        - generic [ref=e25]:
+          - link "Get Started Free" [ref=e26] [cursor=pointer]:
+            - /url: /login
+            - text: Get Started Free
+            - img [ref=e27] [cursor=pointer]
+          - button "Watch Demo" [ref=e29] [cursor=pointer]
+      - generic [ref=e31]:
+        - generic [ref=e32]:
+          - heading "Why RocketTrainer?" [level=2] [ref=e33]
+          - paragraph [ref=e34]: Professional-level coaching powered by AI, available 24/7 at a fraction of the cost.
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - img [ref=e38]
+            - heading "Smart Analysis" [level=3] [ref=e40]
+            - paragraph [ref=e41]: AI analyzes your replays to identify specific weaknesses in your gameplay.
+          - generic [ref=e42]:
+            - img [ref=e44]
+            - heading "Personalized Training" [level=3] [ref=e46]
+            - paragraph [ref=e47]: Get custom training pack recommendations based on your specific needs.
+          - generic [ref=e48]:
+            - img [ref=e50]
+            - heading "Track Progress" [level=3] [ref=e52]
+            - paragraph [ref=e53]: Monitor your improvement over time with detailed analytics and insights.
+          - generic [ref=e54]:
+            - img [ref=e56]
+            - heading "Find Partners" [level=3] [ref=e58]
+            - paragraph [ref=e59]: Connect with players at your skill level for training sessions.
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - heading "Proven Results" [level=2] [ref=e63]
+          - paragraph [ref=e64]: Join thousands of players who have improved their rank with RocketTrainer.
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - generic [ref=e67]: 25%
+            - generic [ref=e68]: Average Rank Improvement
+          - generic [ref=e69]:
+            - generic [ref=e70]: 10K+
+            - generic [ref=e71]: Replays Analyzed
+          - generic [ref=e72]:
+            - generic [ref=e73]: 95%
+            - generic [ref=e74]: User Satisfaction
+      - generic [ref=e76]:
+        - heading "Ready to Rank Up?" [level=2] [ref=e77]
+        - paragraph [ref=e78]: Start your journey to Grand Champion today with personalized AI coaching.
+        - link "Start Training Now" [ref=e79] [cursor=pointer]:
+          - /url: /login
+          - text: Start Training Now
+          - img [ref=e80] [cursor=pointer]
+```

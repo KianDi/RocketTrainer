@@ -18,6 +18,37 @@ services:
       - redis
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
+  celery-worker:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/rockettrainer
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - BALLCHASING_API_KEY=${BALLCHASING_API_KEY:-}
+      - STEAM_API_KEY=${STEAM_API_KEY:-}
+      - DEBUG=true
+    volumes:
+      - ./backend:/app
+      - ./ml:/app/ml
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.celery_app worker --loglevel=info --queues=replay_processing,ml_training
+
+  celery-flower:
+    build: ./backend
+    ports:
+      - "5555:5555"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/rockettrainer
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=dev-secret-key-change-in-production
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+    command: celery -A app.celery_app flower --port=5555
+
   db:
     image: timescale/timescaledb:latest-pg14
     environment:

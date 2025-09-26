@@ -92,8 +92,8 @@ export interface NavbarProps {
 export interface SkillCategoryScore {
   category: string;
   score: number;
-  confidence: number;
-  description: string;
+  percentile?: number;
+  trend?: string;
 }
 
 export interface WeaknessAnalysisRequest {
@@ -105,17 +105,13 @@ export interface WeaknessAnalysisRequest {
 
 export interface WeaknessAnalysisResponse {
   user_id: string;
-  analysis_id: string;
+  analysis_date: string;
   primary_weakness: string;
-  secondary_weakness: string;
   confidence: number;
-  skill_scores: SkillCategoryScore[];
-  improvement_potential: number;
+  skill_categories: SkillCategoryScore[];
   matches_analyzed: number;
-  recommendations: string[];
-  analysis_timestamp: string;
-  cache_hit: boolean;
-  processing_time_ms: number;
+  recommendations_available: boolean;
+  analysis_summary?: string;
 }
 
 export interface TrainingRecommendationRequest {

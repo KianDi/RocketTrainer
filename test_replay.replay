@@ -1,0 +1,3 @@
+This is a test replay file for testing upload functionality.
+It's not a real Rocket League replay, but it has the .replay extension.
+This file is used to test the upload endpoint and ensure it can handle file uploads correctly.

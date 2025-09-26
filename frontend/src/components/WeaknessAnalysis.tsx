@@ -41,10 +41,7 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
     return 'bg-red-500';
   };
 
-  const formatProcessingTime = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
+
 
   React.useEffect(() => {
     if (data && onAnalysisComplete) {
@@ -63,12 +60,7 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
         {data && (
           <div className="flex items-center space-x-2 text-sm text-gray-500">
             <ClockIcon className="w-4 h-4" />
-            <span>Processed in {formatProcessingTime(data.processing_time_ms)}</span>
-            {data.cache_hit && (
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                Cached
-              </span>
-            )}
+            <span>Analysis completed on {new Date(data.analysis_date).toLocaleDateString()}</span>
           </div>
         )}
       </div>
@@ -156,9 +148,9 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
-                  {Math.round(data.improvement_potential * 100)}%
+                  {data.matches_analyzed}
                 </div>
-                <div className="text-sm text-gray-600">Improvement Potential</div>
+                <div className="text-sm text-gray-600">Matches Analyzed</div>
               </div>
             </div>
           </div>
@@ -176,16 +168,7 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
                   #1
                 </div>
               </div>
-              
-              <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <div>
-                  <span className="font-medium text-yellow-800">Secondary: {data.secondary_weakness}</span>
-                  <div className="text-sm text-yellow-600">Second priority for improvement</div>
-                </div>
-                <div className="px-3 py-1 bg-yellow-200 text-yellow-800 rounded-full text-sm font-medium">
-                  #2
-                </div>
-              </div>
+
             </div>
           </div>
 
@@ -193,44 +176,50 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Detailed Skill Breakdown</h3>
             <div className="space-y-3">
-              {data.skill_scores.map((skill: SkillCategoryScore, index: number) => (
+              {data.skill_categories && data.skill_categories.map((skill: SkillCategoryScore, index: number) => (
                 <div key={index} className="p-4 border border-gray-200 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-gray-900">{skill.category}</span>
                     <div className="flex items-center space-x-2">
-                      <span className={`px-2 py-1 rounded-full text-sm font-medium ${getScoreColor(skill.score)}`}>
-                        {skill.score}/100
+                      <span className={`px-2 py-1 rounded-full text-sm font-medium ${getScoreColor(skill.score * 100)}`}>
+                        {Math.round(skill.score * 100)}/100
                       </span>
-                      <span className="text-xs text-gray-500">
-                        {Math.round(skill.confidence * 100)}% confidence
-                      </span>
+                      {skill.percentile && (
+                        <span className="text-xs text-gray-500">
+                          {Math.round(skill.percentile)}th percentile
+                        </span>
+                      )}
                     </div>
                   </div>
                   
                   <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
                     <div
                       className={`h-2 rounded-full transition-all duration-500 ${getScoreBarColor(skill.score)}`}
-                      style={{ width: `${skill.score}%` }}
+                      style={{ width: `${skill.score * 100}%` }}
                     ></div>
                   </div>
                   
-                  <p className="text-sm text-gray-600">{skill.description}</p>
+                  {skill.trend && (
+                    <p className="text-sm text-gray-600">
+                      Trend: <span className="capitalize">{skill.trend}</span>
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
           </div>
 
           {/* Recommendations */}
-          {data.recommendations && data.recommendations.length > 0 && (
+          {data.recommendations_available && (
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-3">AI Recommendations</h3>
-              <div className="space-y-2">
-                {data.recommendations.map((recommendation: string, index: number) => (
-                  <div key={index} className="flex items-start space-x-3 p-3 bg-blue-50 rounded-lg">
-                    <CheckCircleIcon className="w-5 h-5 text-blue-500 mt-0.5" />
-                    <span className="text-sm text-blue-800">{recommendation}</span>
-                  </div>
-                ))}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center space-x-2">
+                  <CheckCircleIcon className="w-5 h-5 text-blue-500" />
+                  <span className="text-sm text-blue-800">
+                    Training recommendations are available! Visit the Training tab to see personalized recommendations.
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -238,9 +227,14 @@ const WeaknessAnalysis: React.FC<WeaknessAnalysisProps> = ({
           {/* Analysis Metadata */}
           <div className="text-xs text-gray-500 pt-4 border-t border-gray-200">
             <div className="flex justify-between">
-              <span>Analysis ID: {data.analysis_id}</span>
-              <span>Generated: {new Date(data.analysis_timestamp).toLocaleString()}</span>
+              <span>User ID: {data.user_id}</span>
+              <span>Generated: {new Date(data.analysis_date).toLocaleString()}</span>
             </div>
+            {data.analysis_summary && (
+              <div className="mt-2 text-sm text-gray-600">
+                <strong>Summary:</strong> {data.analysis_summary}
+              </div>
+            )}
           </div>
         </div>
       )}

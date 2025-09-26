@@ -15,6 +15,7 @@ from app.api.auth import get_current_user
 from app.schemas.replay import ReplayResponse, ReplayUpload, ReplayAnalysis, ReplaySearchRequest, ReplaySearchResponse
 from app.services.replay_service import ReplayService
 from app.services.ballchasing_service import ballchasing_service
+from app.celery_app import celery_app
 
 router = APIRouter()
 logger = structlog.get_logger()
@@ -52,6 +53,7 @@ async def upload_replay(
             replay_filename=file.filename,
             playlist="unknown",  # Will be updated after processing
             duration=0,  # Will be updated after processing
+            match_date=datetime.utcnow(),  # Set current time as default, will be updated after processing
             score_team_0=0,  # Will be updated after processing
             score_team_1=0,  # Will be updated after processing
             result="unknown",  # Will be updated after processing
@@ -62,27 +64,28 @@ async def upload_replay(
         db.commit()
         db.refresh(match)
         
-        # Queue background processing
-        background_tasks.add_task(
-            ReplayService.process_replay_file,
+        # Queue background processing using Celery
+        task_result = await ReplayService.process_replay_file(
             match_id=str(match.id),
             file_content=file_content,
             filename=file.filename
         )
-        
+
         logger.info(
             "Replay uploaded for processing",
             user_id=str(current_user.id),
             match_id=str(match.id),
-            filename=file.filename
+            filename=file.filename,
+            task_id=task_result.get("task_id")
         )
-        
+
         return ReplayResponse(
             id=str(match.id),
             filename=file.filename,
             status="processing",
             message="Replay uploaded successfully and is being processed",
-            uploaded_at=match.created_at
+            uploaded_at=match.created_at,
+            task_id=task_result.get("task_id")
         )
         
     except Exception as e:
@@ -119,7 +122,7 @@ async def import_from_ballchasing(
             ballchasing_id=replay_data.ballchasing_id,
             playlist="unknown",  # Will be updated after processing
             duration=0,  # Will be updated after processing
-            match_date=datetime.utcnow(),  # Temporary date, will be updated after processing
+            match_date=datetime.utcnow(),  # Set current time as default, will be updated after processing
             score_team_0=0,  # Will be updated after processing
             score_team_1=0,  # Will be updated after processing
             result="unknown",  # Will be updated after processing
@@ -228,6 +231,61 @@ async def get_user_replays(
         )
         for match in matches
     ]
+
+
+@router.get("/task-status/{task_id}")
+async def get_task_status(
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get the status of a background processing task."""
+    try:
+        # Get task result from Celery
+        task_result = celery_app.AsyncResult(task_id)
+
+        if task_result.state == "PENDING":
+            response = {
+                "task_id": task_id,
+                "state": "PENDING",
+                "current": 0,
+                "total": 100,
+                "status": "Task is waiting to be processed..."
+            }
+        elif task_result.state == "PROGRESS":
+            response = {
+                "task_id": task_id,
+                "state": "PROGRESS",
+                "current": task_result.info.get("current", 0),
+                "total": task_result.info.get("total", 100),
+                "status": task_result.info.get("status", "Processing...")
+            }
+        elif task_result.state == "SUCCESS":
+            response = {
+                "task_id": task_id,
+                "state": "SUCCESS",
+                "current": 100,
+                "total": 100,
+                "status": "Task completed successfully!",
+                "result": task_result.result
+            }
+        else:  # FAILURE
+            response = {
+                "task_id": task_id,
+                "state": "FAILURE",
+                "current": 0,
+                "total": 100,
+                "status": f"Task failed: {str(task_result.info)}",
+                "error": str(task_result.info)
+            }
+
+        return response
+
+    except Exception as e:
+        logger.error("Failed to get task status", task_id=task_id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get task status"
+        )
 
 
 @router.delete("/{replay_id}")

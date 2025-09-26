@@ -16,6 +16,7 @@
     "d3": "^7.8.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-dropzone": "^14.3.8",
     "react-router-dom": "^6.20.1",
     "react-scripts": "5.0.1",
     "three": "^0.158.0",

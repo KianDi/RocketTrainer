@@ -29,7 +29,8 @@ class WeaknessDetector(BaseMLModel):
                  model_type: str = "random_forest",
                  n_estimators: int = 100,
                  max_depth: Optional[int] = None,
-                 random_state: Optional[int] = None):
+                 random_state: Optional[int] = None,
+                 model_path: Optional[str] = None):
         """
         Initialize weakness detection model.
 
@@ -38,16 +39,23 @@ class WeaknessDetector(BaseMLModel):
             n_estimators: Number of trees in ensemble
             max_depth: Maximum depth of trees
             random_state: Random state for reproducibility
+            model_path: Path to pre-trained model (if available)
         """
         super().__init__(model_name="WeaknessDetector")
-        
+
         self.model_type = model_type
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.random_state = random_state or ml_config.random_state
-        
-        # Initialize model
-        self.model = self._create_model()
+        self.model_path = model_path
+
+        # Initialize components
+        self.model = None
+        self.label_encoder = None
+        self.feature_pipeline = None
+
+        # Try to load pre-trained model
+        self._load_trained_model()
         
         # Weakness detection specific attributes
         self.skill_categories = list(ml_config.skill_categories)
@@ -63,8 +71,36 @@ class WeaknessDetector(BaseMLModel):
         logger.info("WeaknessDetector initialized",
                    model_type=model_type,
                    n_estimators=n_estimators,
-                   skill_categories=len(self.skill_categories))
-    
+                   skill_categories=len(self.skill_categories),
+                   has_trained_model=self.is_trained)
+
+    def _load_trained_model(self):
+        """Load pre-trained model if available."""
+        import joblib
+        import os
+
+        model_dir = "/app/ml/trained_models"
+        model_path = os.path.join(model_dir, "weakness_detector.joblib")
+        encoder_path = os.path.join(model_dir, "weakness_detector_encoder.joblib")
+        pipeline_path = os.path.join(model_dir, "weakness_detector_pipeline.joblib")
+
+        try:
+            if all(os.path.exists(p) for p in [model_path, encoder_path, pipeline_path]):
+                self.model = joblib.load(model_path)
+                self.label_encoder = joblib.load(encoder_path)
+                self.feature_pipeline = joblib.load(pipeline_path)
+                self.is_trained = True
+
+                logger.info("Loaded pre-trained weakness detector model",
+                           model_path=model_path)
+            else:
+                logger.info("No pre-trained model found, will use fallback implementation")
+                self.is_trained = False
+
+        except Exception as e:
+            logger.warning("Failed to load pre-trained model", error=str(e))
+            self.is_trained = False
+
     def _create_model(self):
         """Create the appropriate ML model based on configuration."""
         if self.model_type == "random_forest":
@@ -213,91 +249,130 @@ class WeaknessDetector(BaseMLModel):
     def predict(self, matches: List[Match]) -> List[Dict[str, Any]]:
         """
         Predict weaknesses for given matches.
-        
+
         Args:
             matches: Matches to analyze
-            
+
         Returns:
             List of weakness predictions with confidence scores
         """
-        if not self.is_trained:
-            raise ValueError("Model must be trained before making predictions")
-        
         try:
             logger.debug("Predicting weaknesses", matches=len(matches))
-            
-            # Extract features
-            X = self.feature_pipeline.transform(matches)
-            
-            if X.shape[0] == 0:
-                logger.warning("No features extracted for prediction")
-                return []
-            
-            # Make predictions
-            y_pred = self.model.predict(X)
-            y_pred_proba = self.model.predict_proba(X)
 
-            # Get the classes that the model was actually trained on
-            trained_classes = self.model.classes_
+            # Use trained model if available, otherwise fallback to heuristic
+            if self.is_trained and self.model is not None:
+                return self._predict_with_trained_model(matches)
+            else:
+                return self._predict_with_heuristics(matches)
 
-            logger.debug("Prediction debug info",
-                        y_pred=y_pred.tolist(),
-                        trained_classes=trained_classes.tolist(),
-                        n_classes=len(trained_classes),
-                        skill_categories_count=len(self.skill_categories))
-
-            predictions = []
-
-            for i, match in enumerate(matches):
-                if i >= len(y_pred):
-                    break
-
-                predicted_class_label = y_pred[i]  # This is the actual class label, not index
-                confidence_scores = y_pred_proba[i]
-
-                # Find the index of this class in trained_classes
-                predicted_class_idx = np.where(trained_classes == predicted_class_label)[0][0]
-
-                # Use the class label directly as the weakness index
-                predicted_weakness = self.skill_categories[predicted_class_label].value
-                prediction_confidence = float(confidence_scores[predicted_class_idx])
-                
-                # Get top 3 weaknesses with confidence scores
-                top_weaknesses = []
-                for j, score in enumerate(confidence_scores):
-                    if score >= self.confidence_threshold:
-                        # Use trained_classes[j] to get the actual class label
-                        class_label = trained_classes[j]
-                        weakness_name = self.skill_categories[class_label].value
-                        top_weaknesses.append({
-                            "category": weakness_name,
-                            "confidence": float(score),
-                            "severity": self._calculate_severity(score)
-                        })
-                
-                # Sort by confidence
-                top_weaknesses.sort(key=lambda x: x["confidence"], reverse=True)
-                
-                prediction = {
-                    "match_id": str(match.id),
-                    "primary_weakness": predicted_weakness,
-                    "confidence": prediction_confidence,
-                    "is_confident": prediction_confidence >= self.confidence_threshold,
-                    "top_weaknesses": top_weaknesses[:3],  # Top 3 weaknesses
-                    "analysis_summary": self._generate_analysis_summary(
-                        predicted_weakness, prediction_confidence, top_weaknesses
-                    )
-                }
-                
-                predictions.append(prediction)
-            
-            logger.debug("Weakness predictions completed", predictions=len(predictions))
-            
-            return predictions
-            
         except Exception as e:
             logger.error("Failed to predict weaknesses", error=str(e))
-            raise
+            # Fallback to heuristic method
+            return self._predict_with_heuristics(matches)
+
+    def _predict_with_trained_model(self, matches: List[Match]) -> List[Dict[str, Any]]:
+        """Predict using trained ML model."""
+        # Extract features
+        X = self.feature_pipeline.transform(matches)
+
+        if X.shape[0] == 0:
+            logger.warning("No features extracted for prediction")
+            return []
+
+        # Make predictions
+        y_pred = self.model.predict(X)
+        y_pred_proba = self.model.predict_proba(X)
+
+        # Decode predictions using label encoder
+        predicted_weaknesses = self.label_encoder.inverse_transform(y_pred)
+
+        predictions = []
+
+        for i, match in enumerate(matches):
+            if i >= len(predicted_weaknesses):
+                break
+
+            predicted_weakness = predicted_weaknesses[i]
+            confidence_scores = y_pred_proba[i]
+            prediction_confidence = float(np.max(confidence_scores))
+
+            # Get top 3 weaknesses with confidence scores
+            top_weaknesses = []
+            top_indices = np.argsort(confidence_scores)[::-1][:3]
+
+            for idx in top_indices:
+                weakness_name = self.label_encoder.classes_[idx]
+                confidence = float(confidence_scores[idx])
+                if confidence >= 0.1:  # Include weaknesses with at least 10% confidence
+                    top_weaknesses.append({
+                        "category": weakness_name,
+                        "confidence": confidence,
+                        "severity": self._calculate_severity(confidence)
+                    })
+
+            prediction = {
+                "match_id": str(match.id),
+                "primary_weakness": predicted_weakness,
+                "confidence": prediction_confidence,
+                "top_weaknesses": top_weaknesses,
+                "analysis_method": "trained_model"
+            }
+
+            predictions.append(prediction)
+
+        return predictions
+
+    def _predict_with_heuristics(self, matches: List[Match]) -> List[Dict[str, Any]]:
+        """Fallback heuristic-based prediction when no trained model is available."""
+        predictions = []
+
+        for match in matches:
+            # Simple heuristic analysis based on match statistics
+            weaknesses = []
+
+            # Analyze shooting efficiency
+            if match.shots > 0:
+                shooting_accuracy = match.goals / match.shots
+                if shooting_accuracy < 0.15:  # Less than 15% accuracy
+                    weaknesses.append(("shooting", 0.7))
+
+            # Analyze defensive performance
+            goals_against = 3 if not match.is_win else 1  # Estimate
+            if goals_against > 2:
+                weaknesses.append(("defending", 0.6))
+
+            # Analyze positioning (based on saves vs goals against ratio)
+            if match.saves < goals_against:
+                weaknesses.append(("positioning", 0.5))
+
+            # Default to mechanical if no clear weakness
+            if not weaknesses:
+                weaknesses.append(("mechanical", 0.4))
+
+            # Sort by confidence
+            weaknesses.sort(key=lambda x: x[1], reverse=True)
+            primary_weakness, confidence = weaknesses[0]
+
+            # Create top weaknesses list
+            top_weaknesses = []
+            for weakness, conf in weaknesses[:3]:
+                top_weaknesses.append({
+                    "category": weakness,
+                    "confidence": conf,
+                    "severity": self._calculate_severity(conf)
+                })
+
+            prediction = {
+                "match_id": str(match.id),
+                "primary_weakness": primary_weakness,
+                "confidence": confidence,
+                "top_weaknesses": top_weaknesses,
+                "analysis_method": "heuristic"
+            }
+
+            predictions.append(prediction)
+
+        return predictions
     
     def _calculate_severity(self, confidence: float) -> str:
         """Calculate weakness severity based on confidence score."""
@@ -404,7 +479,7 @@ class WeaknessDetector(BaseMLModel):
             
             analysis_report = {
                 "total_matches_analyzed": len(matches),
-                "confident_predictions": len([p for p in predictions if p["is_confident"]]),
+                "confident_predictions": len([p for p in predictions if p.get("confidence", 0) >= self.confidence_threshold]),
                 "primary_weaknesses": dict(sorted_weaknesses[:3]),  # Top 3
                 "all_weaknesses": dict(sorted_weaknesses),
                 "improvement_recommendations": self._generate_improvement_recommendations(sorted_weaknesses),

@@ -21,56 +21,50 @@ class ReplayService:
     
     @staticmethod
     async def process_replay_file(match_id: str, file_content: bytes, filename: str):
-        """Process an uploaded replay file."""
-        db = SessionLocal()
+        """
+        Process an uploaded replay file using Celery background task.
+        This method now delegates to the Celery task for actual processing.
+        """
+        logger.info("Queuing replay file for processing",
+                   match_id=match_id,
+                   filename=filename,
+                   file_size=len(file_content))
+
         try:
-            match = db.query(Match).filter(Match.id == match_id).first()
-            if not match:
-                logger.error("Match not found for processing", match_id=match_id)
-                return
-            
-            # TODO: Implement actual replay parsing
-            # For MVP, we'll create mock analysis data
-            analysis_result = ReplayService._mock_replay_analysis(filename)
-            
-            # Update match with analysis results
-            match.playlist = analysis_result.get("playlist", "ranked-duels")
-            match.duration = analysis_result.get("duration", 300)
-            match.match_date = datetime.utcnow()
-            match.score_team_0 = analysis_result.get("score_team_0", 0)
-            match.score_team_1 = analysis_result.get("score_team_1", 0)
-            match.result = analysis_result.get("result", "unknown")
-            
-            # Player stats
-            player_stats = analysis_result.get("player_stats", {})
-            match.goals = player_stats.get("goals", 0)
-            match.assists = player_stats.get("assists", 0)
-            match.saves = player_stats.get("saves", 0)
-            match.shots = player_stats.get("shots", 0)
-            match.score = player_stats.get("score", 0)
-            match.boost_usage = player_stats.get("boost_usage", 0.0)
-            match.average_speed = player_stats.get("average_speed", 0.0)
-            
-            # Store full replay data
-            match.replay_data = analysis_result
-            match.processed = True
-            match.processed_at = datetime.utcnow()
-            
-            db.commit()
-            
-            logger.info("Replay processed successfully", match_id=match_id, filename=filename)
-            
+            # Import here to avoid circular imports
+            from app.tasks.replay_processing import process_replay_file as process_task
+
+            # Queue the processing task
+            task = process_task.delay(match_id, file_content, filename)
+
+            logger.info("Replay processing task queued",
+                       match_id=match_id,
+                       task_id=task.id,
+                       filename=filename)
+
+            return {"task_id": task.id, "status": "queued"}
+
         except Exception as e:
-            logger.error("Replay processing failed", match_id=match_id, error=str(e))
-            # Mark as failed
-            match = db.query(Match).filter(Match.id == match_id).first()
-            if match:
-                match.processed = True
-                match.processed_at = datetime.utcnow()
-                match.replay_data = {"error": str(e), "status": "failed"}
-                db.commit()
-        finally:
-            db.close()
+            logger.error("Failed to queue replay processing task",
+                        match_id=match_id,
+                        filename=filename,
+                        error=str(e))
+
+            # Mark match as failed immediately
+            db = SessionLocal()
+            try:
+                match = db.query(Match).filter(Match.id == match_id).first()
+                if match:
+                    match.processed = True
+                    match.processed_at = datetime.utcnow()
+                    match.replay_data = {"error": f"Failed to queue processing: {str(e)}", "status": "failed"}
+                    db.commit()
+            except Exception as db_error:
+                logger.error("Failed to update match status", error=str(db_error))
+            finally:
+                db.close()
+
+            raise
     
     @staticmethod
     async def process_ballchasing_replay(match_id: str, ballchasing_id: str):
