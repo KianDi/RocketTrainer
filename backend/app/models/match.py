@@ -49,12 +49,14 @@ class Match(Base):
     
     # Analysis data
     replay_data = Column(JSON, nullable=True)  # Full replay analysis
-    weakness_analysis = Column(JSON, nullable=True)  # ML analysis results
+    weakness_analysis = Column(JSON, nullable=True)  # ML analysis results (legacy)
+    coaching_insights = Column(JSON, nullable=True)  # AI-powered coaching insights
     processed = Column(Boolean, default=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     processed_at = Column(DateTime(timezone=True), nullable=True)
+    insights_generated_at = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="matches")

@@ -110,6 +110,8 @@ class ModelManager:
                 # Pass model path for models that support it
                 if model_name == "weakness_detector":
                     model_instance = model_class(model_path=model_dir)
+                elif model_name == "recommendation_engine":
+                    model_instance = model_class(self._db_session)
                 else:
                     model_instance = model_class(self._db_session)
             else:

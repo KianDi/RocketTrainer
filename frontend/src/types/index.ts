@@ -29,12 +29,100 @@ export interface ReplayUpload {
   file: File;
 }
 
+export interface PlayerStats {
+  // Core performance stats
+  goals?: number;
+  assists?: number;
+  saves?: number;
+  shots?: number;
+  score?: number;
+
+  // Movement and positioning metrics
+  boost_usage?: number;
+  average_speed?: number;
+  time_supersonic?: number;
+  time_on_ground?: number;
+  time_low_air?: number;
+  time_high_air?: number;
+
+  // AI analysis scores (0-1 scale representing efficiency/performance)
+  positioning_score?: number;
+  rotation_score?: number;
+  aerial_efficiency?: number;
+  boost_efficiency?: number;
+
+  // Action counts
+  defensive_actions?: number;
+  offensive_actions?: number;
+}
+
+export interface WeaknessAnalysis {
+  primary_weakness?: string;
+  confidence?: number;
+  recommendations?: string[];
+}
+
+// New AI-powered coaching insights interfaces
+export interface PerformanceArea {
+  name: string;
+  score: number;
+  percentile?: number;
+  status: 'strength' | 'average' | 'weakness';
+  contributing_metrics: string[];
+  raw_score?: number;
+}
+
+export interface WeaknessInsight {
+  area: string;
+  severity: number;
+  impact_potential: number;
+  primary_issue: string;
+  coaching_feedback: string;
+  specific_recommendations: string[];
+  confidence: number;
+}
+
+export interface StrengthInsight {
+  area: string;
+  score: number;
+  percentile?: number;
+  positive_feedback: string;
+  leverage_suggestions: string[];
+}
+
+export interface CoachingInsights {
+  match_id: string;
+  overall_performance_score: number;
+  performance_areas: PerformanceArea[];
+  top_weaknesses: WeaknessInsight[];
+  top_strengths: StrengthInsight[];
+  improvement_priority: string;
+  key_takeaway: string;
+  generated_at: string;
+  confidence_score: number;
+}
+
+export interface CoachingInsightsResponse {
+  success: boolean;
+  insights?: CoachingInsights;
+  error_message?: string;
+  processing_time_ms?: number;
+  cache_hit: boolean;
+}
+
 export interface ReplayAnalysis {
   id: string;
-  filename: string;
-  status: 'processing' | 'completed' | 'failed';
-  weaknesses: string[];
-  recommendations: TrainingRecommendation[];
+  filename?: string;
+  ballchasing_id?: string;
+  playlist: string;
+  duration: number;
+  match_date?: string;
+  result: 'win' | 'loss' | 'tie';
+  score: string; // Format: "1-2"
+  player_stats: PlayerStats;
+  weakness_analysis?: WeaknessAnalysis;
+  processed: boolean;
+  processed_at?: string;
   created_at: string;
 }
 
@@ -124,27 +212,24 @@ export interface TrainingRecommendationRequest {
 export interface TrainingRecommendationItem {
   training_pack_id: string;
   name: string;
-  description: string;
-  difficulty: string;
-  category: string;
   code: string;
-  creator: string;
+  category: string;
+  difficulty: number; // 1-5 scale
   relevance_score: number;
+  difficulty_match: number;
+  quality_score: number;
+  overall_score: number;
   reasoning: string;
-  estimated_improvement: number;
-  time_investment: string;
+  estimated_improvement?: number;
 }
 
 export interface TrainingRecommendationResponse {
   user_id: string;
-  recommendation_id: string;
-  skill_level: string;
   recommendations: TrainingRecommendationItem[];
-  total_recommendations: number;
-  personalization_score: number;
+  skill_level_detected: string;
+  total_packs_evaluated: number;
+  generation_time: string;
   cache_hit: boolean;
-  processing_time_ms: number;
-  generated_at: string;
 }
 
 export interface ModelInfo {

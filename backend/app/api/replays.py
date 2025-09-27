@@ -12,9 +12,11 @@ from app.database import get_db
 from app.models.user import User
 from app.models.match import Match
 from app.api.auth import get_current_user
-from app.schemas.replay import ReplayResponse, ReplayUpload, ReplayAnalysis, ReplaySearchRequest, ReplaySearchResponse
+from app.schemas.replay import ReplayResponse, ReplayUpload, ReplayAnalysis, ReplaySearchRequest, ReplaySearchResponse, PlayerStats
+from app.schemas.coaching import CoachingInsights, CoachingInsightsResponse, WeaknessAnalysisRequest, AnalysisContext
 from app.services.replay_service import ReplayService
 from app.services.ballchasing_service import ballchasing_service
+from app.services.weakness_detection_service import WeaknessDetectionService
 from app.celery_app import celery_app
 
 router = APIRouter()
@@ -163,24 +165,33 @@ async def import_from_ballchasing(
         )
 
 
-@router.get("/{replay_id}", response_model=ReplayAnalysis)
+@router.get("/{replay_id}/analysis", response_model=ReplayAnalysis)
 async def get_replay_analysis(
     replay_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get detailed analysis of a replay."""
+    """Get comprehensive analysis of a replay."""
     match = db.query(Match).filter(
         Match.id == replay_id,
         Match.user_id == current_user.id
     ).first()
-    
+
     if not match:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Replay not found"
         )
-    
+
+    if not match.processed:
+        raise HTTPException(
+            status_code=status.HTTP_202_ACCEPTED,
+            detail="Analysis still processing. Please try again in a moment."
+        )
+
+    # Parse replay_data JSON to extract all metrics
+    replay_data = match.replay_data or {}
+
     return ReplayAnalysis(
         id=str(match.id),
         filename=match.replay_filename,
@@ -191,19 +202,145 @@ async def get_replay_analysis(
         result=match.result,
         score=f"{match.score_team_0}-{match.score_team_1}",
         player_stats={
+            # Core stats from match table
             "goals": match.goals,
             "assists": match.assists,
             "saves": match.saves,
             "shots": match.shots,
             "score": match.score,
+            # Movement and positioning metrics
             "boost_usage": match.boost_usage,
-            "average_speed": match.average_speed
+            "average_speed": match.average_speed,
+            "time_supersonic": match.time_supersonic,
+            "time_on_ground": match.time_on_ground,
+            "time_low_air": match.time_low_air,
+            "time_high_air": match.time_high_air,
+            # AI analysis scores from replay_data JSON
+            "positioning_score": replay_data.get('positioning_score'),
+            "rotation_score": replay_data.get('rotation_score'),
+            "aerial_efficiency": replay_data.get('aerial_efficiency'),
+            "boost_efficiency": replay_data.get('boost_efficiency'),
+            # Action counts from replay_data JSON
+            "defensive_actions": replay_data.get('defensive_actions'),
+            "offensive_actions": replay_data.get('offensive_actions'),
         },
         weakness_analysis=match.weakness_analysis,
         processed=match.processed,
         processed_at=match.processed_at,
         created_at=match.created_at
     )
+
+
+@router.get("/{replay_id}/insights", response_model=CoachingInsightsResponse)
+async def get_coaching_insights(
+    replay_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get AI-powered coaching insights for a replay."""
+    start_time = datetime.utcnow()
+
+    try:
+        # Get the match
+        match = db.query(Match).filter(
+            Match.id == replay_id,
+            Match.user_id == current_user.id
+        ).first()
+
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Replay not found"
+            )
+
+        if not match.processed:
+            raise HTTPException(
+                status_code=status.HTTP_202_ACCEPTED,
+                detail="Replay is still being processed. Please try again in a moment."
+            )
+
+        # Check if insights already exist and are recent
+        if (match.coaching_insights and
+            match.insights_generated_at and
+            (datetime.utcnow() - match.insights_generated_at.replace(tzinfo=None)).total_seconds() < 3600):  # 1 hour cache
+
+            processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            # Convert string back to datetime for cached response
+            cached_insights = match.coaching_insights.copy()
+            cached_insights['generated_at'] = datetime.fromisoformat(cached_insights['generated_at'])
+            return CoachingInsightsResponse(
+                success=True,
+                insights=CoachingInsights(**cached_insights),
+                processing_time_ms=int(processing_time),
+                cache_hit=True
+            )
+
+        # Generate new insights
+        weakness_service = WeaknessDetectionService()
+
+        # Create analysis context
+        context = AnalysisContext(
+            playlist=match.playlist,
+            duration=match.duration,
+            result=match.result,
+            score_differential=abs(match.score_team_0 - match.score_team_1),
+            team_score=match.score_team_0 if match.result in ['win', 'tie'] else match.score_team_1,
+            opponent_score=match.score_team_1 if match.result in ['win', 'tie'] else match.score_team_0,
+            match_date=match.match_date
+        )
+
+        # Extract player stats
+        player_stats = PlayerStats(
+            goals=match.goals,
+            assists=match.assists,
+            saves=match.saves,
+            shots=match.shots,
+            score=match.score,
+            boost_usage=match.boost_usage,
+            average_speed=match.average_speed,
+            time_supersonic=match.time_supersonic,
+            time_on_ground=match.time_on_ground,
+            time_low_air=match.time_low_air,
+            time_high_air=match.time_high_air,
+            positioning_score=match.replay_data.get('positioning_score') if match.replay_data else None,
+            rotation_score=match.replay_data.get('rotation_score') if match.replay_data else None,
+            aerial_efficiency=match.replay_data.get('aerial_efficiency') if match.replay_data else None,
+            boost_efficiency=match.replay_data.get('boost_efficiency') if match.replay_data else None,
+            defensive_actions=match.replay_data.get('defensive_actions') if match.replay_data else None,
+            offensive_actions=match.replay_data.get('offensive_actions') if match.replay_data else None
+        )
+
+        # Generate insights
+        insights = weakness_service.analyze_performance(player_stats, context)
+
+        # Store insights in database (convert datetime to string for JSON serialization)
+        insights_dict = insights.dict()
+        insights_dict['generated_at'] = insights_dict['generated_at'].isoformat()
+        match.coaching_insights = insights_dict
+        match.insights_generated_at = datetime.utcnow()
+        db.commit()
+
+        processing_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+
+        return CoachingInsightsResponse(
+            success=True,
+            insights=insights,
+            processing_time_ms=int(processing_time),
+            cache_hit=False
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to generate coaching insights",
+                    replay_id=replay_id,
+                    user_id=str(current_user.id),
+                    error=str(e))
+        return CoachingInsightsResponse(
+            success=False,
+            error_message="Failed to generate coaching insights. Please try again later.",
+            processing_time_ms=int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        )
 
 
 @router.get("/", response_model=List[ReplayResponse])

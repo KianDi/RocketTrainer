@@ -29,9 +29,9 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
     'bronze', 'silver', 'gold', 'platinum', 'diamond', 'champion', 'grand_champion', 'supersonic_legend'
   ];
 
-  const availableFocusAreas = [
+  const availableFocusAreas = React.useMemo(() => [
     'mechanical', 'positioning', 'game_sense', 'aerial', 'ground_play', 'saves', 'shooting'
-  ];
+  ], []);
 
   const handleGetRecommendations = async () => {
     const request: any = {
@@ -57,13 +57,29 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
     );
   };
 
-  const getDifficultyColor = (difficulty: string): string => {
-    switch (difficulty.toLowerCase()) {
-      case 'beginner': return 'bg-green-100 text-green-800';
-      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'advanced': return 'bg-orange-100 text-orange-800';
-      case 'expert': return 'bg-red-100 text-red-800';
+  const getDifficultyColor = (difficulty: number): string => {
+    if (!difficulty) return 'bg-gray-100 text-gray-800';
+
+    switch (difficulty) {
+      case 1: return 'bg-green-100 text-green-800';
+      case 2: return 'bg-green-100 text-green-800';
+      case 3: return 'bg-yellow-100 text-yellow-800';
+      case 4: return 'bg-orange-100 text-orange-800';
+      case 5: return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getDifficultyLabel = (difficulty: number): string => {
+    if (!difficulty) return 'Unknown';
+
+    switch (difficulty) {
+      case 1: return 'Beginner';
+      case 2: return 'Easy';
+      case 3: return 'Intermediate';
+      case 4: return 'Advanced';
+      case 5: return 'Expert';
+      default: return 'Unknown';
     }
   };
 
@@ -81,18 +97,20 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
     if (weaknessAnalysis && !skillLevel) {
       // Try to infer skill level from weakness analysis or user data
       setSkillLevel('platinum'); // Default fallback
-      
+
       // Auto-set focus areas based on weaknesses
-      const weaknesses = [weaknessAnalysis.primary_weakness, weaknessAnalysis.secondary_weakness];
+      const weaknesses = [weaknessAnalysis.primary_weakness, weaknessAnalysis.secondary_weakness]
+        .filter(w => w && typeof w === 'string'); // Filter out undefined/null values
+
       const mappedAreas = weaknesses
         .map(w => w.toLowerCase().replace(/\s+/g, '_'))
         .filter(area => availableFocusAreas.includes(area));
-      
+
       if (mappedAreas.length > 0) {
         setFocusAreas(mappedAreas);
       }
     }
-  }, [weaknessAnalysis, skillLevel]);
+  }, [weaknessAnalysis, skillLevel, availableFocusAreas]);
 
   return (
     <div className={`bg-white rounded-lg shadow-md p-6 ${className}`}>
@@ -105,7 +123,7 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
         {data && (
           <div className="flex items-center space-x-2 text-sm text-gray-500">
             <TrophyIcon className="w-4 h-4" />
-            <span>{data.total_recommendations} recommendations</span>
+            <span>{data.recommendations.length} recommendations</span>
             {data.cache_hit && (
               <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
                 Cached
@@ -226,13 +244,16 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold text-rl-blue">
-                  {Math.round(data.personalization_score * 100)}%
+                  {data.total_packs_evaluated}
                 </div>
-                <div className="text-sm text-gray-600">Personalization Score</div>
+                <div className="text-sm text-gray-600">Packs Evaluated</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900">
-                  {data.skill_level.charAt(0).toUpperCase() + data.skill_level.slice(1)}
+                  {data.skill_level_detected ?
+                    data.skill_level_detected.charAt(0).toUpperCase() + data.skill_level_detected.slice(1).replace('_', ' ') :
+                    'Unknown'
+                  }
                 </div>
                 <div className="text-sm text-gray-600">Detected Skill Level</div>
               </div>
@@ -248,16 +269,13 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
                     <div className="flex items-center space-x-2 mb-1">
                       <h3 className="text-lg font-semibold text-gray-900">{item.name}</h3>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(item.difficulty)}`}>
-                        {item.difficulty}
+                        {getDifficultyLabel(item.difficulty)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <span>by {item.creator}</span>
-                      <span>•</span>
+                    <div className="flex items-center space-x-4 text-sm text-gray-500 mb-2">
                       <span>{item.category}</span>
                       <span>•</span>
-                      <span>{item.time_investment}</span>
+                      <span>Quality: {Math.round(item.quality_score * 100)}%</span>
                     </div>
                   </div>
                   
@@ -267,7 +285,7 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
                         <StarIcon
                           key={i}
                           className={`w-4 h-4 ${
-                            i < getRelevanceStars(item.relevance_score)
+                            i < getRelevanceStars(item.overall_score)
                               ? 'text-yellow-400 fill-current'
                               : 'text-gray-300'
                           }`}
@@ -275,7 +293,7 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
                       ))}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {Math.round(item.relevance_score * 100)}% match
+                      {Math.round(item.overall_score * 100)}% overall
                     </div>
                   </div>
                 </div>
@@ -284,9 +302,15 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
                   <p className="text-sm text-blue-800">
                     <strong>Why this helps:</strong> {item.reasoning}
                   </p>
-                  <p className="text-sm text-blue-700 mt-1">
-                    <strong>Expected improvement:</strong> {Math.round(item.estimated_improvement * 100)}%
-                  </p>
+                  {item.estimated_improvement && (
+                    <p className="text-sm text-blue-700 mt-1">
+                      <strong>Expected improvement:</strong> {Math.round(item.estimated_improvement * 100)}%
+                    </p>
+                  )}
+                  <div className="flex items-center space-x-4 text-xs text-blue-600 mt-2">
+                    <span>Relevance: {Math.round(item.relevance_score * 100)}%</span>
+                    <span>Difficulty Match: {Math.round(item.difficulty_match * 100)}%</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -315,8 +339,8 @@ const TrainingRecommendations: React.FC<TrainingRecommendationsProps> = ({
           {/* Metadata */}
           <div className="text-xs text-gray-500 pt-4 border-t border-gray-200">
             <div className="flex justify-between">
-              <span>Recommendation ID: {data.recommendation_id}</span>
-              <span>Generated: {new Date(data.generated_at).toLocaleString()}</span>
+              <span>User ID: {data.user_id}</span>
+              <span>Generated: {new Date(data.generation_time).toLocaleString()}</span>
             </div>
           </div>
         </div>

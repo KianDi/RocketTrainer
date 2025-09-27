@@ -29,18 +29,31 @@ class ReplayResponse(BaseModel):
 
 
 class PlayerStats(BaseModel):
-    """Schema for player statistics in replay."""
+    """Schema for comprehensive player statistics in replay."""
+    # Core performance stats
     goals: Optional[int] = None
     assists: Optional[int] = None
     saves: Optional[int] = None
     shots: Optional[int] = None
     score: Optional[int] = None
+
+    # Movement and positioning metrics
     boost_usage: Optional[float] = None
     average_speed: Optional[float] = None
     time_supersonic: Optional[float] = None
     time_on_ground: Optional[float] = None
     time_low_air: Optional[float] = None
     time_high_air: Optional[float] = None
+
+    # AI analysis scores (0-1 scale representing efficiency/performance)
+    positioning_score: Optional[float] = None
+    rotation_score: Optional[float] = None
+    aerial_efficiency: Optional[float] = None
+    boost_efficiency: Optional[float] = None
+
+    # Action counts
+    defensive_actions: Optional[int] = None
+    offensive_actions: Optional[int] = None
 
 
 class ReplayAnalysis(BaseModel):

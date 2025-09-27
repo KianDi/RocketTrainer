@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getAuthToken } from './authService';
+import { ReplayAnalysis, CoachingInsightsResponse } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -26,33 +27,7 @@ export interface TaskStatus {
   error?: string;
 }
 
-export interface ReplayAnalysis {
-  id: string;
-  filename?: string;
-  ballchasing_id?: string;
-  playlist: string;
-  duration: number;
-  match_date?: string;
-  result: string;
-  score: string;
-  player_stats: {
-    goals?: number;
-    assists?: number;
-    saves?: number;
-    shots?: number;
-    score?: number;
-    boost_usage?: number;
-    average_speed?: number;
-    time_supersonic?: number;
-    time_on_ground?: number;
-    time_low_air?: number;
-    time_high_air?: number;
-  };
-  weakness_analysis?: any;
-  processed: boolean;
-  processed_at?: string;
-  created_at: string;
-}
+
 
 class ReplayService {
   private getAuthHeaders() {
@@ -150,6 +125,9 @@ class ReplayService {
     } catch (error) {
       console.error('Get replay analysis failed:', error);
       if (axios.isAxiosError(error)) {
+        if (error.response?.status === 202) {
+          throw new Error('Analysis still processing. Please try again in a moment.');
+        }
         throw new Error(error.response?.data?.detail || 'Failed to get replay analysis');
       }
       throw error;
@@ -218,6 +196,28 @@ class ReplayService {
       console.error('Search Ballchasing replays failed:', error);
       if (axios.isAxiosError(error)) {
         throw new Error(error.response?.data?.detail || 'Search failed');
+      }
+      throw error;
+    }
+  }
+
+  async getCoachingInsights(replayId: string): Promise<CoachingInsightsResponse> {
+    try {
+      const token = getAuthToken();
+      const response = await axios.get(`${API_BASE_URL}/replays/${replayId}/insights`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error fetching coaching insights:', error);
+      if (error.response?.status === 404) {
+        throw new Error('Replay not found');
+      } else if (error.response?.status === 202) {
+        throw new Error('Replay is still being processed');
+      } else if (error.response?.data?.error_message) {
+        throw new Error(error.response.data.error_message);
       }
       throw error;
     }

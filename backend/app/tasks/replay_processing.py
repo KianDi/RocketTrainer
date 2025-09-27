@@ -14,6 +14,9 @@ from app.celery_app import celery_app
 from app.database import SessionLocal
 from app.models.match import Match
 from app.models.user import User
+from app.services.weakness_detection_service import WeaknessDetectionService
+from app.schemas.coaching import AnalysisContext
+from app.schemas.replay import PlayerStats
 
 logger = structlog.get_logger()
 
@@ -232,10 +235,76 @@ def _update_match_with_carball_data(match: Match, stats: Dict[str, Any], db) -> 
         
         db.commit()
         logger.info("Match updated with carball data", match_id=str(match.id))
+
+        # Generate coaching insights automatically
+        try:
+            _generate_coaching_insights(match, db)
+            logger.info("Coaching insights generated", match_id=str(match.id))
+        except Exception as e:
+            logger.warning("Failed to generate coaching insights",
+                         match_id=str(match.id),
+                         error=str(e))
+            # Don't fail the entire task if insights generation fails
         
     except Exception as e:
         logger.error("Failed to update match with carball data", 
                     match_id=str(match.id), 
+                    error=str(e))
+        db.rollback()
+        raise
+
+
+def _generate_coaching_insights(match: Match, db) -> None:
+    """Generate coaching insights for a processed match."""
+    try:
+        weakness_service = WeaknessDetectionService()
+
+        # Create analysis context
+        context = AnalysisContext(
+            playlist=match.playlist,
+            duration=match.duration,
+            result=match.result,
+            score_differential=abs(match.score_team_0 - match.score_team_1),
+            team_score=match.score_team_0 if match.result in ['win', 'tie'] else match.score_team_1,
+            opponent_score=match.score_team_1 if match.result in ['win', 'tie'] else match.score_team_0,
+            match_date=match.match_date
+        )
+
+        # Extract player stats
+        player_stats = PlayerStats(
+            goals=match.goals,
+            assists=match.assists,
+            saves=match.saves,
+            shots=match.shots,
+            score=match.score,
+            boost_usage=match.boost_usage,
+            average_speed=match.average_speed,
+            time_supersonic=match.time_supersonic,
+            time_on_ground=match.time_on_ground,
+            time_low_air=match.time_low_air,
+            time_high_air=match.time_high_air,
+            positioning_score=match.replay_data.get('positioning_score') if match.replay_data else None,
+            rotation_score=match.replay_data.get('rotation_score') if match.replay_data else None,
+            aerial_efficiency=match.replay_data.get('aerial_efficiency') if match.replay_data else None,
+            boost_efficiency=match.replay_data.get('boost_efficiency') if match.replay_data else None,
+            defensive_actions=match.replay_data.get('defensive_actions') if match.replay_data else None,
+            offensive_actions=match.replay_data.get('offensive_actions') if match.replay_data else None
+        )
+
+        # Generate insights
+        insights = weakness_service.analyze_performance(player_stats, context)
+
+        # Store insights in database (convert datetime to string for JSON serialization)
+        insights_dict = insights.dict()
+        insights_dict['generated_at'] = insights_dict['generated_at'].isoformat()
+        match.coaching_insights = insights_dict
+        match.insights_generated_at = datetime.utcnow()
+
+        db.commit()
+
+    except Exception as e:
+        logger.error("Failed to generate coaching insights in background task",
+                    match_id=str(match.id),
                     error=str(e))
         db.rollback()
         raise

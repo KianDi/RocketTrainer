@@ -31,27 +31,35 @@ class RateLimitInfo:
 @dataclass
 class RateLimitConfig:
     """Rate limit configuration for different user tiers and endpoints."""
-    
+
     # Rate limits per hour for different user tiers
     FREE_TIER_LIMITS = {
         "analyze-weaknesses": 10,
         "recommend-training": 10,
         "model-status": 60  # More generous for monitoring
     }
-    
+
     PREMIUM_TIER_LIMITS = {
         "analyze-weaknesses": 100,
         "recommend-training": 100,
         "model-status": 300  # More generous for monitoring
     }
-    
+
+    # Development mode limits (much higher for testing)
+    DEV_TIER_LIMITS = {
+        "analyze-weaknesses": 1000,
+        "recommend-training": 1000,
+        "model-status": 3000
+    }
+
     # Default limits if endpoint not specified
     DEFAULT_FREE_LIMIT = 10
     DEFAULT_PREMIUM_LIMIT = 100
-    
+    DEFAULT_DEV_LIMIT = 1000
+
     # Time window in seconds (1 hour)
     WINDOW_SIZE = 3600
-    
+
     # Redis key TTL (slightly longer than window for cleanup)
     KEY_TTL = 3900
 
@@ -81,7 +89,9 @@ class MLRateLimiter:
         logger.info("ML Rate Limiter initialized",
                    window_size=self.config.WINDOW_SIZE,
                    free_limits=self.config.FREE_TIER_LIMITS,
-                   premium_limits=self.config.PREMIUM_TIER_LIMITS)
+                   premium_limits=self.config.PREMIUM_TIER_LIMITS,
+                   dev_limits=self.config.DEV_TIER_LIMITS,
+                   debug_mode=settings.debug)
     
     def _get_rate_limit_key(self, user_id: str, endpoint: str) -> str:
         """Generate Redis key for rate limiting."""
@@ -89,7 +99,12 @@ class MLRateLimiter:
     
     def _get_user_limits(self, is_premium: bool, endpoint: str) -> int:
         """Get rate limit for user tier and endpoint."""
-        if is_premium:
+        # In debug mode, use much higher limits for development
+        if settings.debug:
+            return self.config.DEV_TIER_LIMITS.get(
+                endpoint, self.config.DEFAULT_DEV_LIMIT
+            )
+        elif is_premium:
             return self.config.PREMIUM_TIER_LIMITS.get(
                 endpoint, self.config.DEFAULT_PREMIUM_LIMIT
             )

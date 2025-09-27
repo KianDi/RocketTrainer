@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Weakness Analysis API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .skill-category {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+        .score-bar {
+            background: #ddd;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff4444, #ffaa00, #44ff44);
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>Weakness Analysis API Test</h1>
+    
+    <button onclick="testWeaknessAnalysis()">Test Weakness Analysis</button>
+    <button onclick="testErrorHandling()">Test Error Handling</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        const TEST_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2YjM0MmRiYy0yOGMzLTQzYzMtOTNmMy1lOTQxNWFjMjJkM2QiLCJ1c2VybmFtZSI6Imt5YW4xIiwiZXhwIjoxNzU5MDAyMTYyfQ.PiqxBkFDPkRvCb70bdNvXyxBxePU56zQcZcfV4y7Eus';
+        const TEST_USER_ID = '6b342dbc-28c3-43c3-93f3-e9415ac22d3d';
+
+        function addResult(message, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isError ? 'error' : 'success'}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        async function testWeaknessAnalysis() {
+            try {
+                addResult('🧠 Testing Weakness Analysis API...');
+                
+                const response = await fetch(`${API_BASE_URL}/api/ml/analyze-weaknesses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${TEST_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        user_id: TEST_USER_ID,
+                        include_confidence: true,
+                        analysis_depth: 'standard'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                addResult(`✅ Weakness Analysis completed successfully!`);
+                
+                // Display key results
+                addResult(`<strong>Primary Weakness:</strong> ${data.primary_weakness} (${Math.round(data.confidence * 100)}% confidence)`);
+                addResult(`<strong>Matches Analyzed:</strong> ${data.matches_analyzed}`);
+                addResult(`<strong>Recommendations Available:</strong> ${data.recommendations_available ? 'Yes' : 'No'}`);
+                
+                if (data.analysis_summary) {
+                    addResult(`<strong>Summary:</strong> ${data.analysis_summary}`);
+                }
+
+                // Display skill categories
+                if (data.skill_categories && data.skill_categories.length > 0) {
+                    addResult('<strong>Skill Breakdown:</strong>');
+                    
+                    // Sort by score (descending)
+                    const sortedSkills = data.skill_categories.sort((a, b) => b.score - a.score);
+                    
+                    let skillsHtml = '<div>';
+                    sortedSkills.forEach(skill => {
+                        const scorePercent = Math.round(skill.score * 100);
+                        const color = getScoreColor(skill.score);
+                        
+                        skillsHtml += `
+                            <div class="skill-category">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span><strong>${skill.category.replace('_', ' ').toUpperCase()}</strong></span>
+                                    <span>${scorePercent}%</span>
+                                </div>
+                                <div class="score-bar">
+                                    <div class="score-fill" style="width: ${scorePercent}%; background: ${color};"></div>
+                                </div>
+                                <small>Percentile: ${Math.round(skill.percentile)}% | Trend: ${skill.trend}</small>
+                            </div>
+                        `;
+                    });
+                    skillsHtml += '</div>';
+                    
+                    addResult(skillsHtml);
+                }
+
+                // Test frontend operations
+                testFrontendOperations(data);
+
+            } catch (error) {
+                addResult(`❌ Weakness Analysis Test Failed: ${error.message}`, true);
+                console.error('Weakness Analysis Test Error:', error);
+            }
+        }
+
+        function getScoreColor(score) {
+            if (score >= 0.7) return '#44ff44'; // Green
+            if (score >= 0.5) return '#ffaa00'; // Orange
+            return '#ff4444'; // Red
+        }
+
+        function testFrontendOperations(data) {
+            addResult('🔧 Testing Frontend Component Operations...');
+            
+            try {
+                // Test operations that the React component would perform
+                
+                // 1. Test confidence display
+                const confidencePercent = Math.round(data.confidence * 100);
+                addResult(`✅ Confidence display: ${confidencePercent}%`);
+                
+                // 2. Test skill category operations
+                data.skill_categories.forEach((skill, index) => {
+                    const scorePercent = Math.round(skill.score * 100);
+                    const percentile = Math.round(skill.percentile);
+                    addResult(`✅ Skill ${index + 1}: ${skill.category} - ${scorePercent}% (${percentile}th percentile)`);
+                });
+                
+                // 3. Test date formatting
+                const analysisDate = new Date(data.analysis_date).toLocaleString();
+                addResult(`✅ Analysis date: ${analysisDate}`);
+                
+                addResult(`🎉 All frontend operations completed successfully!`);
+                
+            } catch (error) {
+                addResult(`❌ Frontend Operations Test Failed: ${error.message}`, true);
+                console.error('Frontend Operations Error:', error);
+            }
+        }
+
+        async function testErrorHandling() {
+            addResult('🚨 Testing Error Handling...');
+            
+            try {
+                // Test with invalid user ID to trigger an error
+                const response = await fetch(`${API_BASE_URL}/api/ml/analyze-weaknesses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${TEST_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        user_id: '00000000-0000-0000-0000-000000000000', // Invalid user
+                        include_confidence: true,
+                        analysis_depth: 'standard'
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    addResult(`✅ Error handling works: ${response.status} - ${errorData.detail || errorData.message}`);
+                } else {
+                    addResult(`❌ Expected error but got success`, true);
+                }
+
+            } catch (error) {
+                addResult(`✅ Network error handling works: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

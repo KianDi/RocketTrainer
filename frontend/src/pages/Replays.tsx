@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   PlayIcon,
   ChartBarIcon,
@@ -12,6 +13,7 @@ import ReplayUpload from '../components/ReplayUpload';
 import { replayService, ReplayResponse } from '../services/replayService';
 
 const Replays: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'upload' | 'manage'>('upload');
   const [replays, setReplays] = useState<ReplayResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -263,7 +265,7 @@ const Replays: React.FC = () => {
                       <div className="flex items-center space-x-2">
                         {replay.status === 'processed' && (
                           <button
-                            onClick={() => {/* TODO: Navigate to analysis */}}
+                            onClick={() => navigate(`/replays/${replay.id}/analysis`)}
                             className="btn-secondary text-sm"
                           >
                             View Analysis

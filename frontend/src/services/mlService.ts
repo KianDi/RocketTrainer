@@ -201,6 +201,17 @@ class MLService {
   }
 
   /**
+   * Check if an error is an insufficient data error
+   */
+  isInsufficientDataError(error: any): boolean {
+    return error && (
+      error.message?.includes('Insufficient match data') ||
+      error.message?.includes('Need at least') ||
+      (error.details && error.details.required_matches && error.details.available_matches)
+    );
+  }
+
+  /**
    * Get user-friendly error message
    */
   getErrorMessage(error: any): string {
@@ -211,6 +222,14 @@ class MLService {
 
     if (this.isNetworkError(error)) {
       return 'Unable to connect to the AI analysis service. Please check your connection and try again.';
+    }
+
+    if (this.isInsufficientDataError(error)) {
+      const details = error.details || {};
+      const required = details.required_matches || 3;
+      const available = details.available_matches || 0;
+
+      return `Need at least ${required} processed replays for AI analysis. You currently have ${available}. Upload more replays in the Replays tab to get started!`;
     }
 
     return error.message || 'An unexpected error occurred. Please try again.';

@@ -6,6 +6,7 @@ import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Replays from './pages/Replays';
+import MatchAnalysisPage from './pages/MatchAnalysisPage';
 import Training from './pages/Training';
 import Profile from './pages/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -28,13 +29,21 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
-              <Route 
-                path="/replays" 
+              <Route
+                path="/replays"
                 element={
                   <ProtectedRoute>
                     <Replays />
                   </ProtectedRoute>
-                } 
+                }
+              />
+              <Route
+                path="/replays/:id/analysis"
+                element={
+                  <ProtectedRoute>
+                    <MatchAnalysisPage />
+                  </ProtectedRoute>
+                }
               />
               <Route 
                 path="/training" 

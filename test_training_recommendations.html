@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Training Recommendations API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <h1>Training Recommendations API Test</h1>
+    
+    <button onclick="testAPI()">Test Training Recommendations API</button>
+    <button onclick="testFrontendTypes()">Test Frontend Type Compatibility</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        const TEST_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjM2I0MzNhYS0yMTlhLTQwNzAtYWE3Yi1kMzNlOGY1NTBhOTEiLCJ1c2VybmFtZSI6IlRlc3RQbGF5ZXIiLCJleHAiOjE3NTg5NDQxMDh9.uaLVVOxHFPEa9I-KSSFP7NzuZnOiCnEc2FWGT7zdTgE';
+        const TEST_USER_ID = 'c3b433aa-219a-4070-aa7b-d33e8f550a91';
+
+        function addResult(message, isError = false) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${isError ? 'error' : 'success'}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        async function testAPI() {
+            try {
+                addResult('🚀 Testing Training Recommendations API...');
+
+                const response = await fetch(`${API_BASE_URL}/api/ml/recommend-training`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${TEST_TOKEN}`
+                    },
+                    body: JSON.stringify({
+                        user_id: TEST_USER_ID,
+                        max_recommendations: 3
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                addResult(`✅ API Response received successfully!`);
+                addResult(`<pre>${JSON.stringify(data, null, 2)}</pre>`);
+
+                // Test field access that was causing the error
+                if (data.skill_level_detected) {
+                    const skillLevel = data.skill_level_detected.charAt(0).toUpperCase() + data.skill_level_detected.slice(1).replace('_', ' ');
+                    addResult(`✅ Skill level access works: "${skillLevel}"`);
+                } else {
+                    addResult('❌ skill_level_detected field is missing or undefined', true);
+                }
+
+                if (data.recommendations && data.recommendations.length > 0) {
+                    const firstRec = data.recommendations[0];
+                    addResult(`✅ First recommendation: "${firstRec.name}" (${firstRec.code})`);
+                    addResult(`✅ Difficulty: ${firstRec.difficulty} (${getDifficultyLabel(firstRec.difficulty)})`);
+                    addResult(`✅ Scores: Overall=${Math.round(firstRec.overall_score * 100)}%, Quality=${Math.round(firstRec.quality_score * 100)}%`);
+
+                    // Test all the operations that the frontend component does
+                    testFrontendOperations(data);
+                } else {
+                    addResult('❌ No recommendations returned', true);
+                }
+
+            } catch (error) {
+                addResult(`❌ API Test Failed: ${error.message}`, true);
+                console.error('API Test Error:', error);
+            }
+        }
+
+        function testFrontendOperations(data) {
+            addResult('🔧 Testing Frontend Component Operations...');
+
+            try {
+                // Test the operations that were failing in the React component
+
+                // 1. Test skill level display (line 252-256 in component)
+                const skillLevelDisplay = data.skill_level_detected ?
+                    data.skill_level_detected.charAt(0).toUpperCase() + data.skill_level_detected.slice(1).replace('_', ' ') :
+                    'Unknown';
+                addResult(`✅ Skill level display: "${skillLevelDisplay}"`);
+
+                // 2. Test recommendations count (line 126 in component)
+                const recommendationsCount = data.recommendations.length;
+                addResult(`✅ Recommendations count: ${recommendationsCount}`);
+
+                // 3. Test difficulty operations for each recommendation
+                data.recommendations.forEach((item, index) => {
+                    const difficultyLabel = getDifficultyLabel(item.difficulty);
+                    const difficultyColor = getDifficultyColor(item.difficulty);
+                    const overallScore = Math.round(item.overall_score * 100);
+                    const qualityScore = Math.round(item.quality_score * 100);
+                    const relevanceScore = Math.round(item.relevance_score * 100);
+                    const difficultyMatch = Math.round(item.difficulty_match * 100);
+
+                    addResult(`✅ Rec ${index + 1}: "${item.name}" - ${difficultyLabel} (${item.difficulty})`);
+                    addResult(`   Scores: Overall=${overallScore}%, Quality=${qualityScore}%, Relevance=${relevanceScore}%, Difficulty Match=${difficultyMatch}%`);
+
+                    // Test estimated improvement (optional field)
+                    if (item.estimated_improvement) {
+                        const estimatedImprovement = Math.round(item.estimated_improvement * 100);
+                        addResult(`   Expected improvement: ${estimatedImprovement}%`);
+                    }
+                });
+
+                // 4. Test metadata operations (line 342-346 in component)
+                const generationTime = new Date(data.generation_time).toLocaleString();
+                addResult(`✅ Generation time: ${generationTime}`);
+                addResult(`✅ Cache hit: ${data.cache_hit}`);
+                addResult(`✅ Total packs evaluated: ${data.total_packs_evaluated}`);
+
+                addResult(`🎉 All frontend operations completed successfully!`);
+
+            } catch (error) {
+                addResult(`❌ Frontend Operations Test Failed: ${error.message}`, true);
+                console.error('Frontend Operations Error:', error);
+            }
+        }
+
+        function getDifficultyColor(difficulty) {
+            if (!difficulty) return 'bg-gray-100 text-gray-800';
+
+            switch (difficulty) {
+                case 1: return 'bg-green-100 text-green-800';
+                case 2: return 'bg-green-100 text-green-800';
+                case 3: return 'bg-yellow-100 text-yellow-800';
+                case 4: return 'bg-orange-100 text-orange-800';
+                case 5: return 'bg-red-100 text-red-800';
+                default: return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        function getDifficultyLabel(difficulty) {
+            switch (difficulty) {
+                case 1: return 'Beginner';
+                case 2: return 'Easy';
+                case 3: return 'Intermediate';
+                case 4: return 'Advanced';
+                case 5: return 'Expert';
+                default: return 'Unknown';
+            }
+        }
+
+        function testFrontendTypes() {
+            addResult('🔍 Testing Frontend Type Compatibility...');
+
+            // Simulate the CORRECTED data structure that comes from the API
+            const mockApiResponse = {
+                user_id: TEST_USER_ID,
+                recommendations: [
+                    {
+                        training_pack_id: "test-id",
+                        name: "Test Pack",
+                        code: "TEST-CODE",
+                        category: "shooting",
+                        difficulty: 3,  // Now a number, not string
+                        relevance_score: 0.8,
+                        difficulty_match: 0.9,  // New field
+                        quality_score: 0.85,    // New field
+                        overall_score: 0.85,    // New field
+                        reasoning: "Test reasoning",
+                        estimated_improvement: 0.15
+                    }
+                ],
+                skill_level_detected: "platinum",  // Corrected field name
+                total_packs_evaluated: 10,         // Corrected field name
+                generation_time: new Date().toISOString(),  // Corrected field name
+                cache_hit: false
+            };
+
+            try {
+                // Test the operations that were failing
+                const skillLevel = mockApiResponse.skill_level_detected.charAt(0).toUpperCase() +
+                                 mockApiResponse.skill_level_detected.slice(1).replace('_', ' ');
+                addResult(`✅ Skill level formatting works: "${skillLevel}"`);
+
+                const firstRec = mockApiResponse.recommendations[0];
+                const difficultyLabel = getDifficultyLabel(firstRec.difficulty);
+                addResult(`✅ Difficulty label works: ${firstRec.difficulty} -> "${difficultyLabel}"`);
+
+                const overallScore = Math.round(firstRec.overall_score * 100);
+                addResult(`✅ Score calculation works: ${firstRec.overall_score} -> ${overallScore}%`);
+
+                // Test new fields
+                const qualityScore = Math.round(firstRec.quality_score * 100);
+                const difficultyMatch = Math.round(firstRec.difficulty_match * 100);
+                addResult(`✅ Quality score: ${qualityScore}%`);
+                addResult(`✅ Difficulty match: ${difficultyMatch}%`);
+
+                addResult(`✅ All frontend type operations work correctly!`);
+
+            } catch (error) {
+                addResult(`❌ Frontend Type Test Failed: ${error.message}`, true);
+                console.error('Frontend Type Test Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
