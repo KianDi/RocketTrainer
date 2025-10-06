@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  ChartBarIcon, 
-  CpuChipIcon, 
+import {
+  ChartBarIcon,
+  CpuChipIcon,
   TrophyIcon,
   UserGroupIcon,
   ArrowRightIcon,
@@ -12,12 +12,24 @@ import {
   SparklesIcon,
   RocketLaunchIcon
 } from '@heroicons/react/24/outline';
+import { GL } from '@/components/gl';
 
 const LandingPage: React.FC = () => {
+  const [hovering, setHovering] = useState(false);
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
+      {/* 3D Particle Background */}
+      <GL hovering={hovering} />
+
+      {/* Content Layer */}
+      <div className="relative z-10">
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-rl-blue via-rl-purple to-rl-orange py-20 lg:py-32">
+      <section
+        className="relative overflow-hidden py-20 lg:py-32"
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+      >
         <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:20px_20px]" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center">
@@ -250,6 +262,7 @@ const LandingPage: React.FC = () => {
           </p>
         </div>
       </section>
+      </div> {/* End Content Layer */}
     </div>
   );
 };
