@@ -35,51 +35,6 @@ make start
 - **API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
 
-## 🏗️ Architecture
-
-### Backend (FastAPI)
-- **FastAPI**: Modern Python web framework
-- **PostgreSQL + TimescaleDB**: Time-series data storage
-- **Redis**: Caching and session management
-- **Celery**: Background task processing
-- **ML Models**: TensorFlow/Scikit-learn for analysis
-
-### Frontend (React)
-- **React 18 + TypeScript**: Modern UI framework
-- **Tailwind CSS**: Utility-first styling
-- **D3.js**: Data visualization
-- **Three.js**: 3D replay viewer (planned)
-
-## 📊 Features
-
-### Phase 1: Foundation ✅
-- [x] Project setup and infrastructure
-- [x] User authentication (Steam OAuth)
-- [x] Database schema and models
-- [x] Basic API endpoints
-- [x] React dashboard with mock data
-
-### Phase 2: Core Analysis ✅
-- [x] ML models for weakness detection
-- [x] Training pack recommendations
-- [x] AI-powered gameplay analysis
-- [x] Personalized training recommendations
-- [ ] Ballchasing.com API integration (planned)
-- [ ] Advanced replay parsing (planned)
-
-### Phase 3: User Experience
-- [ ] Advanced dashboard features
-- [ ] Progress tracking system
-- [ ] Mobile responsiveness
-- [ ] User onboarding flow
-
-### Phase 4: Advanced Features
-- [ ] 3D replay viewer
-- [ ] Player matching system
-- [ ] Discord bot integration
-- [ ] Performance optimization
-
-## 🎮 Current Working Features
 
 ### AI Analysis Dashboard
 - **Weakness Detection**: Upload replays and get AI-powered analysis of your gameplay weaknesses
@@ -87,58 +42,12 @@ make start
 - **Training Recommendations**: Personalized training pack suggestions based on your weaknesses
 - **Progress Tracking**: Monitor improvement over time with confidence scoring
 
-### API Endpoints (Fully Functional)
-- `POST /api/ml/analyze-weaknesses` - AI weakness analysis
-- `POST /api/ml/recommend-training` - Personalized training recommendations
-- `GET /api/ml/model-status` - ML model health and status
 
 ### Development Features
 - Environment-aware configuration (lower requirements for testing)
 - Comprehensive error handling with user-friendly messages
 - Redis caching for improved performance
 - Rate limiting for API protection
-
-## 🛠️ Development
-
-### Available Commands
-```bash
-make help          # Show all available commands
-make setup         # Initial project setup
-make start         # Start development environment
-make stop          # Stop all services
-make test          # Run all tests
-make logs          # Show service logs
-make shell         # Open shell in API container
-make migrate       # Run database migrations
-make seed          # Seed database with training packs
-```
-
-### Project Structure
-```
-RocketTrainer/
-├── backend/           # FastAPI backend
-│   ├── app/          # Application code
-│   ├── tests/        # Backend tests
-│   └── scripts/      # Utility scripts
-├── frontend/         # React frontend
-│   ├── src/          # Source code
-│   └── public/       # Static assets
-├── docs/            # Documentation
-└── ml/              # ML models and training
-```
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-make test
-
-# Backend tests only
-docker-compose run --rm api pytest
-
-# Frontend tests only
-docker-compose run --rm frontend npm test
-```
 
 ## 📈 API Documentation
 
@@ -162,18 +71,6 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/rockettrainer
 SECRET_KEY=your-secret-key-here
 ```
 
-## 🚀 Deployment
-
-### Production Build
-```bash
-make prod-build
-```
-
-### Recommended Platforms
-- **Backend**: Railway, Heroku, or DigitalOcean
-- **Frontend**: Vercel, Netlify, or Cloudflare Pages
-- **Database**: Managed PostgreSQL (AWS RDS, DigitalOcean)
-- **Cache**: Redis Cloud
 
 ## 🤝 Contributing
 
@@ -196,11 +93,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - Create an issue for bug reports
-- Join our Discord for community support
 - Check the documentation in `/docs`
 
 ---
-
-**Status**: Phase 1 Complete ✅ | Phase 2 Complete ✅ | Phase 3 In Progress 🚧
 
 Built with ❤️ for the Rocket League community
