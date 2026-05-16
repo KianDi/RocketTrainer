@@ -1,8 +1,8 @@
-# RocketTrainer 🚀
+# RocketTrainer 
 
 An AI-powered Rocket League coaching platform that analyzes your gameplay, identifies weaknesses, and creates personalized training routines to help you rank up faster.
 
-## 🎯 What It Does
+## What it does
 
 RocketTrainer uses machine learning to analyze your Rocket League replays and provides:
 
@@ -11,7 +11,7 @@ RocketTrainer uses machine learning to analyze your Rocket League replays and pr
 - **Progress Tracking**: Detailed analytics and improvement metrics
 - **Rank Prediction**: Forecasts your rank progression based on improvement
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
@@ -49,13 +49,13 @@ make start
 - Redis caching for improved performance
 - Rate limiting for API protection
 
-## 📈 API Documentation
+## API Documentation
 
 Once the development server is running, visit:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 
-## 🔑 Environment Variables
+## Environment Variables
 
 Copy `.env.example` to `.env` and configure:
 
@@ -72,29 +72,16 @@ SECRET_KEY=your-secret-key-here
 ```
 
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Ballchasing.com for replay data API
 - Rocket League community for training pack creation
-- Psyonix for creating an amazing game
+- Psyonix for creating a W game i've spent years on
 
-## 📞 Support
-
-- Create an issue for bug reports
-- Check the documentation in `/docs`
 
 ---
 
-Built with ❤️ for the Rocket League community
